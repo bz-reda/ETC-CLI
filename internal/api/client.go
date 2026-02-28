@@ -1,0 +1,1013 @@
+package api
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"net/http"
+	"os"
+	"path/filepath"
+
+	"paas-cli/internal/config"
+)
+
+type Client struct {
+	cfg    *config.Config
+	http   *http.Client
+}
+
+func NewClient(cfg *config.Config) *Client {
+	return &Client{cfg: cfg, http: &http.Client{}}
+}
+
+// Auth
+
+type AuthResponse struct {
+	Token    string `json:"token"`
+	APIToken string `json:"api_token"`
+	User     struct {
+		ID    string `json:"id"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	} `json:"user"`
+}
+
+func (c *Client) Login(email, password string) (*AuthResponse, error) {
+	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
+	resp, err := c.http.Post(c.cfg.APIHost+"/api/v1/auth/login", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("login failed (status %d)", resp.StatusCode)
+	}
+
+	var result AuthResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result, nil
+}
+
+type RegisterResponse struct {
+	Token    string `json:"token"`
+	APIToken string `json:"api_token"`
+	User     struct {
+		ID            string `json:"id"`
+		Email         string `json:"email"`
+		Name          string `json:"name"`
+		EmailVerified bool   `json:"email_verified"`
+	} `json:"user"`
+	Message string `json:"message"`
+}
+
+func (c *Client) Register(email, password, name string) (*RegisterResponse, error) {
+	body, _ := json.Marshal(map[string]string{
+		"email":    email,
+		"password": password,
+		"name":     name,
+	})
+	resp, err := c.http.Post(c.cfg.APIHost+"/api/v1/auth/register", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 && resp.StatusCode != 201 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return nil, fmt.Errorf("%s", errResp["error"])
+	}
+
+	var result RegisterResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result, nil
+}
+
+type MeResponse struct {
+	ID    string `json:"id"`
+	Email string `json:"email"`
+	Name  string `json:"name"`
+}
+
+func (c *Client) GetMe(token string) (*MeResponse, error) {
+	req, err := http.NewRequest("GET", c.cfg.APIHost+"/api/v1/auth/me", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get user info")
+	}
+
+	var result MeResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result, nil
+}
+
+// Projects
+
+type Project struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Framework string `json:"framework"`
+}
+
+func (c *Client) CreateProject(name, framework string) (*Project, error) {
+	body, _ := json.Marshal(map[string]string{"name": name, "framework": framework})
+	resp, err := c.authRequest("POST", "/api/v1/projects", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to create project: %s", string(respBody))
+	}
+
+	var project Project
+	json.NewDecoder(resp.Body).Decode(&project)
+	return &project, nil
+}
+
+func (c *Client) ListProjects() ([]Project, error) {
+	resp, err := c.authRequest("GET", "/api/v1/projects", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var projects []Project
+	json.NewDecoder(resp.Body).Decode(&projects)
+	return projects, nil
+}
+
+// Domains
+
+func (c *Client) AddDomain(projectID, domain string) error {
+	body, _ := json.Marshal(map[string]interface{}{
+		"project_id": projectID,
+		"domain":     domain,
+		"is_primary": true,
+	})
+	resp, err := c.authRequest("POST", "/api/v1/domains", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to add domain: %s", string(respBody))
+	}
+	return nil
+}
+
+// Deploy
+
+type DeployResponse struct {
+	DeploymentID string `json:"deployment_id"`
+	Status       string `json:"status"`
+	Message      string `json:"message"`
+}
+
+func (c *Client) Deploy(projectID, sourceDir, commitMessage string, isProduction bool) (*DeployResponse, error) {
+	// Create tarball of source directory
+	tarPath := filepath.Join(os.TempDir(), "paas-source.tar.gz")
+	defer os.Remove(tarPath)
+
+	if err := createTarball(sourceDir, tarPath); err != nil {
+		return nil, fmt.Errorf("failed to create tarball: %w", err)
+	}
+
+	// Upload via multipart form
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+
+	writer.WriteField("project_id", projectID)
+	writer.WriteField("commit_message", commitMessage)
+	if isProduction {
+		writer.WriteField("is_production", "true")
+	}
+
+	file, err := os.Open(tarPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	part, err := writer.CreateFormFile("source", "source.tar.gz")
+	if err != nil {
+		return nil, err
+	}
+	io.Copy(part, file)
+	writer.Close()
+
+	req, err := http.NewRequest("POST", c.cfg.APIHost+"/api/v1/deploy/upload", &buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("deploy failed: %s", string(respBody))
+	}
+
+	var result DeployResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result, nil
+}
+
+// Deployment Status
+
+type Deployment struct {
+	ID       string `json:"id"`
+	Status   string `json:"status"`
+	ImageTag string `json:"image_tag"`
+	Domains  []string `json:"domains"`
+
+}
+
+func (c *Client) GetDeployment(id string) (*Deployment, error) {
+	resp, err := c.authRequest("GET", "/api/v1/deployments/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var deployment Deployment
+	json.NewDecoder(resp.Body).Decode(&deployment)
+	return &deployment, nil
+}
+
+func (c *Client) GetDeploymentLogs(id string) (string, error) {
+	resp, err := c.authRequest("GET", "/api/v1/deployments/"+id+"/logs", nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]string
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result["logs"], nil
+}
+
+func (c *Client) ListDomains(projectID string) ([]string, error) {
+	resp, err := c.authRequest("GET", "/api/v1/domains/project/"+projectID, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var domains []struct {
+		Domain string `json:"domain"`
+	}
+	json.NewDecoder(resp.Body).Decode(&domains)
+
+	var result []string
+	for _, d := range domains {
+		result = append(result, d.Domain)
+	}
+	return result, nil
+}
+
+func (c *Client) RemoveDomain(projectID, domain string) error {
+	resp, err := c.authRequest("DELETE", "/api/v1/domains/"+domain+"?project_id="+projectID, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed: %s", string(respBody))
+	}
+	return nil
+}
+
+func (c *Client) GetEnvVars(projectID string) (map[string]string, error) {
+	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var project struct {
+		EnvVars string `json:"env_vars"`
+	}
+	json.NewDecoder(resp.Body).Decode(&project)
+
+	result := make(map[string]string)
+	if project.EnvVars != "" && project.EnvVars != "{}" {
+		json.Unmarshal([]byte(project.EnvVars), &result)
+	}
+	return result, nil
+}
+
+func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
+	envJSON, _ := json.Marshal(envVars)
+	body, _ := json.Marshal(map[string]string{"env_vars": string(envJSON)})
+	resp, err := c.authRequest("PUT", "/api/v1/projects/"+projectID+"/env", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed: %s", string(respBody))
+	}
+	return nil
+}
+
+type DeploymentInfo struct {
+	ID            string `json:"id"`
+	Status        string `json:"status"`
+	ImageTag      string `json:"image_tag"`
+	CommitMessage string `json:"commit_message"`
+	CreatedAt     string `json:"created_at"`
+}
+
+type RollbackResponse struct {
+	ID      string   `json:"id"`
+	Status  string   `json:"status"`
+	Domains []string `json:"domains"`
+}
+
+func (c *Client) ListDeployments(projectID string) ([]DeploymentInfo, error) {
+	resp, err := c.authRequest("GET", "/api/v1/deployments/project/"+projectID, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var deployments []DeploymentInfo
+	json.NewDecoder(resp.Body).Decode(&deployments)
+	return deployments, nil
+}
+
+func (c *Client) Rollback(deploymentID string) (*RollbackResponse, error) {
+	resp, err := c.authRequest("POST", "/api/v1/deployments/"+deploymentID+"/rollback", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed: %s", string(respBody))
+	}
+
+	var result RollbackResponse
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result, nil
+}
+
+func (c *Client) GetAppLogs(projectID string, lines int) (string, error) {
+	resp, err := c.authRequest("GET", fmt.Sprintf("/api/v1/projects/%s/logs?lines=%d", projectID, lines), nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Logs string `json:"logs"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.Logs, nil
+}
+
+func (c *Client) DeleteProject(projectID string) error {
+	resp, err := c.authRequest("DELETE", "/api/v1/projects/"+projectID, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed: %s", string(respBody))
+	}
+	return nil
+}
+
+// Databases
+
+type DatabaseInfo struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Type        string `json:"type"`
+	Version     string `json:"version"`
+	Status      string `json:"status"`
+	Host        string `json:"host"`
+	Port        int    `json:"port"`
+	DBName      string `json:"db_name"`
+	Username    string `json:"username"`
+	StorageMB   int    `json:"storage_mb"`
+	CPULimit    string `json:"cpu_limit"`
+	MemoryLimit string `json:"memory_limit"`
+	ProjectID   string `json:"project_id,omitempty"`
+	CreatedAt   string `json:"created_at"`
+}
+
+func (c *Client) CreateDatabase(name, dbType string) (*DatabaseInfo, error) {
+	body, _ := json.Marshal(map[string]string{"name": name, "type": dbType})
+	resp, err := c.authRequest("POST", "/api/v1/databases", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return nil, fmt.Errorf("%s", errResp["error"])
+	}
+
+	var result struct {
+		Database DatabaseInfo `json:"database"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result.Database, nil
+}
+
+func (c *Client) ListDatabases() ([]DatabaseInfo, error) {
+	resp, err := c.authRequest("GET", "/api/v1/databases", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Databases []DatabaseInfo `json:"databases"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.Databases, nil
+}
+
+func (c *Client) GetDatabase(id string) (*DatabaseInfo, error) {
+	resp, err := c.authRequest("GET", "/api/v1/databases/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("database not found")
+	}
+
+	var result struct {
+		Database DatabaseInfo `json:"database"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result.Database, nil
+}
+
+func (c *Client) DeleteDatabase(id string) error {
+	resp, err := c.authRequest("DELETE", "/api/v1/databases/"+id, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed: %s", string(respBody))
+	}
+	return nil
+}
+
+func (c *Client) LinkDatabase(dbID, projectID string) error {
+	body, _ := json.Marshal(map[string]string{"project_id": projectID})
+	resp, err := c.authRequest("POST", "/api/v1/databases/"+dbID+"/link", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) UnlinkDatabase(dbID string) error {
+	resp, err := c.authRequest("POST", "/api/v1/databases/"+dbID+"/unlink", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+// Helpers
+
+func (c *Client) authRequest(method, path string, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequest(method, c.cfg.APIHost+path, body)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.cfg.Token)
+	req.Header.Set("Content-Type", "application/json")
+	return c.http.Do(req)
+}
+
+
+func (c *Client) ExposeDatabase(id string) (map[string]interface{}, error) {
+	resp, err := c.authRequest("POST", "/api/v1/databases/"+id+"/expose", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("%s", result["error"])
+	}
+	return result, nil
+}
+
+func (c *Client) UnexposeDatabase(id string) error {
+	resp, err := c.authRequest("POST", "/api/v1/databases/"+id+"/unexpose", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) GetDatabaseCredentials(id string) (map[string]interface{}, error) {
+	resp, err := c.authRequest("GET", "/api/v1/databases/"+id+"/credentials", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("%s", result["error"])
+	}
+	return result, nil
+}
+
+func (c *Client) StopDatabase(id string) error {
+	resp, err := c.authRequest("POST", "/api/v1/databases/"+id+"/stop", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) StartDatabase(id string) error {
+	resp, err := c.authRequest("POST", "/api/v1/databases/"+id+"/start", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) RotatePassword(id string) (map[string]interface{}, error) {
+	resp, err := c.authRequest("POST", "/api/v1/databases/"+id+"/rotate", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("%s", result["error"])
+	}
+	return result, nil
+}
+
+
+// Storage
+
+type BucketInfo struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	GarageBucket      string `json:"garage_bucket"`
+	StorageUsedBytes  int64  `json:"storage_used_bytes"`
+	StorageLimitBytes int64  `json:"storage_limit_bytes"`
+	IsPublic          bool   `json:"is_public"`
+	ExternalAccess    bool   `json:"external_access"`
+	Status            string `json:"status"`
+	ProjectID         string `json:"project_id,omitempty"`
+	CreatedAt         string `json:"created_at"`
+}
+
+func (c *Client) CreateBucket(name string) (*BucketInfo, error) {
+	body, _ := json.Marshal(map[string]string{"name": name})
+	resp, err := c.authRequest("POST", "/api/v1/storage", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return nil, fmt.Errorf("%s", errResp["error"])
+	}
+
+	var result struct {
+		Bucket BucketInfo `json:"bucket"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result.Bucket, nil
+}
+
+func (c *Client) ListBuckets() ([]BucketInfo, error) {
+	resp, err := c.authRequest("GET", "/api/v1/storage", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Buckets []BucketInfo `json:"buckets"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.Buckets, nil
+}
+
+func (c *Client) GetBucket(id string) (*BucketInfo, error) {
+	resp, err := c.authRequest("GET", "/api/v1/storage/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("bucket not found")
+	}
+
+	var result struct {
+		Bucket BucketInfo `json:"bucket"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result.Bucket, nil
+}
+
+func (c *Client) DeleteBucket(id string) error {
+	resp, err := c.authRequest("DELETE", "/api/v1/storage/"+id, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) GetBucketCredentials(id string) (map[string]interface{}, error) {
+	resp, err := c.authRequest("GET", "/api/v1/storage/"+id+"/credentials", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Credentials map[string]interface{} `json:"credentials"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get credentials")
+	}
+	return result.Credentials, nil
+}
+
+func (c *Client) RotateBucketCredentials(id string) (map[string]interface{}, error) {
+	resp, err := c.authRequest("POST", "/api/v1/storage/"+id+"/rotate", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Credentials map[string]interface{} `json:"credentials"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to rotate credentials")
+	}
+	return result.Credentials, nil
+}
+
+func (c *Client) LinkBucket(bucketID, projectID string) error {
+	body, _ := json.Marshal(map[string]string{"project_id": projectID})
+	resp, err := c.authRequest("POST", "/api/v1/storage/"+bucketID+"/link", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) UnlinkBucket(bucketID string) error {
+	resp, err := c.authRequest("POST", "/api/v1/storage/"+bucketID+"/unlink", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) ExposeBucket(id string) (map[string]interface{}, error) {
+	resp, err := c.authRequest("POST", "/api/v1/storage/"+id+"/expose", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("%s", result["error"])
+	}
+	return result, nil
+}
+
+func (c *Client) UnexposeBucket(id string) error {
+	resp, err := c.authRequest("POST", "/api/v1/storage/"+id+"/unexpose", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+
+// Auth Apps
+
+type AuthAppInfo struct {
+	ID                        string   `json:"id"`
+	Name                      string   `json:"name"`
+	AppID                     string   `json:"app_id"`
+	ProjectID                 string   `json:"project_id"`
+	JWTExpirySeconds          int      `json:"jwt_expiry_seconds"`
+	RefreshExpirySeconds      int      `json:"refresh_expiry_seconds"`
+	AllowedOrigins            []string `json:"allowed_origins"`
+	EmailVerificationRequired bool     `json:"email_verification_required"`
+	GoogleClientID            string   `json:"google_client_id"`
+	GitHubClientID            string   `json:"github_client_id"`
+	Status                    string   `json:"status"`
+	CreatedAt                 string   `json:"created_at"`
+}
+
+type AuthUserInfo struct {
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	Name          string `json:"name"`
+	EmailVerified bool   `json:"email_verified"`
+	Provider      string `json:"provider"`
+	Disabled      bool   `json:"disabled"`
+	LastLoginAt   string `json:"last_login_at,omitempty"`
+	CreatedAt     string `json:"created_at"`
+}
+
+func (c *Client) CreateAuthApp(name, appID, projectID string) (*AuthAppInfo, error) {
+	body, _ := json.Marshal(map[string]string{"name": name, "app_id": appID, "project_id": projectID})
+	resp, err := c.authRequest("POST", "/api/v1/auth-apps", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return nil, fmt.Errorf("%s", errResp["error"])
+	}
+
+	var result struct {
+		AuthApp AuthAppInfo `json:"auth_app"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result.AuthApp, nil
+}
+
+func (c *Client) ListAuthApps() ([]AuthAppInfo, error) {
+	resp, err := c.authRequest("GET", "/api/v1/auth-apps", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		AuthApps []AuthAppInfo `json:"auth_apps"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.AuthApps, nil
+}
+
+func (c *Client) GetAuthApp(id string) (*AuthAppInfo, error) {
+	resp, err := c.authRequest("GET", "/api/v1/auth-apps/"+id, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("auth app not found")
+	}
+
+	var result struct {
+		AuthApp AuthAppInfo `json:"auth_app"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result.AuthApp, nil
+}
+
+func (c *Client) UpdateAuthApp(id string, updates map[string]interface{}) error {
+	body, _ := json.Marshal(updates)
+	resp, err := c.authRequest("PUT", "/api/v1/auth-apps/"+id, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) DeleteAuthApp(id string) error {
+	resp, err := c.authRequest("DELETE", "/api/v1/auth-apps/"+id, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) GetAuthAppStats(id string) (map[string]interface{}, error) {
+	resp, err := c.authRequest("GET", "/api/v1/auth-apps/"+id+"/stats", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("failed to get stats")
+	}
+	return result, nil
+}
+
+func (c *Client) RotateAuthAppKeys(id string) error {
+	resp, err := c.authRequest("POST", "/api/v1/auth-apps/"+id+"/rotate-keys", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) ListAuthAppUsers(appID string) ([]AuthUserInfo, int, error) {
+	resp, err := c.authRequest("GET", "/api/v1/auth-apps/"+appID+"/users", nil)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Users []AuthUserInfo `json:"users"`
+		Total int            `json:"total"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.Users, result.Total, nil
+}
+
+func (c *Client) DisableAuthUser(appID, userID string) error {
+	resp, err := c.authRequest("POST", "/api/v1/auth-apps/"+appID+"/users/"+userID+"/disable", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) EnableAuthUser(appID, userID string) error {
+	resp, err := c.authRequest("POST", "/api/v1/auth-apps/"+appID+"/users/"+userID+"/enable", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
+
+func (c *Client) DeleteAuthUser(appID, userID string) error {
+	resp, err := c.authRequest("DELETE", "/api/v1/auth-apps/"+appID+"/users/"+userID, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return fmt.Errorf("%s", errResp["error"])
+	}
+	return nil
+}
