@@ -17,6 +17,9 @@ type ProjectConfig struct {
 	Name      string `json:"name"`
 	Slug      string `json:"slug"`
 	Framework string `json:"framework"`
+	SiteID    string `json:"site_id,omitempty"`
+	SiteName  string `json:"site_name,omitempty"`
+	SiteSlug  string `json:"site_slug,omitempty"`
 }
 
 var initCmd = &cobra.Command{
@@ -53,6 +56,43 @@ var initCmd = &cobra.Command{
 			return
 		}
 
+		// Site name — default "main" for single-site projects
+		sitePrompt := promptui.Prompt{
+			Label:   "Site name (e.g. frontend, admin — leave empty for 'main')",
+			Default: "",
+		}
+		siteName, _ := sitePrompt.Run()
+		if siteName == "" {
+			siteName = "main"
+		}
+
+		// The "main" site is auto-created by the backend on project creation.
+		// For any other name, create a new site via the API.
+		var siteID, siteSlug string
+		if siteName == "main" {
+			// Fetch the auto-created main site to get its ID
+			sites, err := client.ListSites(project.ID)
+			if err == nil {
+				for _, s := range sites {
+					if s.Slug == "main" {
+						siteID = s.ID
+						siteSlug = s.Slug
+						break
+					}
+				}
+			}
+		} else {
+			site, err := client.CreateSite(project.ID, siteName)
+			if err != nil {
+				fmt.Printf("⚠️  Failed to create site '%s': %v\n", siteName, err)
+				fmt.Println("   You can add sites later with: espacetech site add <name>")
+			} else {
+				siteID = site.ID
+				siteSlug = site.Slug
+				fmt.Printf("📌 Site '%s' created (slug: %s)\n", site.Name, site.Slug)
+			}
+		}
+
 		// Domain
 		domainPrompt := promptui.Prompt{
 			Label:   "Domain (e.g., mysite.com, leave empty to skip)",
@@ -61,7 +101,7 @@ var initCmd = &cobra.Command{
 		domain, _ := domainPrompt.Run()
 
 		if domain != "" {
-			if err := client.AddDomain(project.ID, domain); err != nil {
+			if err := client.AddDomain(project.ID, siteID, domain); err != nil {
 				fmt.Printf("⚠️  Failed to add domain: %v\n", err)
 			} else {
 				fmt.Printf("🌐 Domain %s added\n", domain)
@@ -74,11 +114,17 @@ var initCmd = &cobra.Command{
 			Name:      project.Name,
 			Slug:      project.Slug,
 			Framework: project.Framework,
+			SiteID:    siteID,
+			SiteName:  siteName,
+			SiteSlug:  siteSlug,
 		}
 		data, _ := json.MarshalIndent(projectCfg, "", "  ")
 		os.WriteFile(".espacetech.json", data, 0644)
 
 		fmt.Printf("✅ Project '%s' created (slug: %s)\n", project.Name, project.Slug)
+		if siteName != "main" {
+			fmt.Printf("   Site: %s (slug: %s)\n", siteName, siteSlug)
+		}
 		fmt.Println("📁 Config saved to .espacetech.json")
 		fmt.Println("\nNext: run 'espacetech deploy --prod' to deploy")
 	},

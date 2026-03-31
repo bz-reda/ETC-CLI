@@ -155,9 +155,57 @@ func (c *Client) ListProjects() ([]Project, error) {
 
 // Domains
 
-func (c *Client) AddDomain(projectID, domain string) error {
+// Sites
+
+type Site struct {
+	ID        string `json:"id"`
+	ProjectID string `json:"project_id"`
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Status    string `json:"status"`
+}
+
+func (c *Client) CreateSite(projectID, name string) (*Site, error) {
+	body, _ := json.Marshal(map[string]string{"name": name})
+	resp, err := c.authRequest("POST", "/api/v1/projects/"+projectID+"/sites", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 201 {
+		var errResp map[string]string
+		json.NewDecoder(resp.Body).Decode(&errResp)
+		return nil, fmt.Errorf("%s", errResp["error"])
+	}
+
+	var result struct {
+		Site Site `json:"site"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return &result.Site, nil
+}
+
+func (c *Client) ListSites(projectID string) ([]Site, error) {
+	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID+"/sites", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Sites []Site `json:"sites"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result.Sites, nil
+}
+
+// Domains
+
+func (c *Client) AddDomain(projectID, siteID, domain string) error {
 	body, _ := json.Marshal(map[string]interface{}{
 		"project_id": projectID,
+		"site_id":    siteID,
 		"domain":     domain,
 		"is_primary": true,
 	})
@@ -182,8 +230,7 @@ type DeployResponse struct {
 	Message      string `json:"message"`
 }
 
-func (c *Client) Deploy(projectID, sourceDir, commitMessage string, isProduction bool) (*DeployResponse, error) {
-	// Create tarball of source directory
+func (c *Client) Deploy(projectID, siteID, sourceDir, commitMessage string, isProduction bool, rootDirectory string) (*DeployResponse, error) {
 	tarPath := filepath.Join(os.TempDir(), "paas-source.tar.gz")
 	defer os.Remove(tarPath)
 
@@ -191,14 +238,19 @@ func (c *Client) Deploy(projectID, sourceDir, commitMessage string, isProduction
 		return nil, fmt.Errorf("failed to create tarball: %w", err)
 	}
 
-	// Upload via multipart form
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
 
 	writer.WriteField("project_id", projectID)
+	if siteID != "" {
+		writer.WriteField("site_id", siteID)
+	}
 	writer.WriteField("commit_message", commitMessage)
 	if isProduction {
 		writer.WriteField("is_production", "true")
+	}
+	if rootDirectory != "" {
+		writer.WriteField("root_directory", rootDirectory)
 	}
 
 	file, err := os.Open(tarPath)
@@ -305,6 +357,18 @@ func (c *Client) RemoveDomain(projectID, domain string) error {
 }
 
 func (c *Client) GetEnvVars(projectID string) (map[string]string, error) {
+	// Auto-detect the site: if the project has exactly one site, use the
+	// site-scoped endpoint (which is where the dashboard stores env vars).
+	sites, err := c.ListSites(projectID)
+	if err == nil && len(sites) == 1 {
+		return c.GetEnvVarsBySite(projectID, sites[0].ID)
+	}
+	if err == nil && len(sites) > 1 {
+		// Multiple sites — caller should pass a site_id explicitly.
+		return nil, fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
+	}
+
+	// Fallback: read from the legacy project-level env_vars field.
 	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID, nil)
 	if err != nil {
 		return nil, err
@@ -324,9 +388,54 @@ func (c *Client) GetEnvVars(projectID string) (map[string]string, error) {
 }
 
 func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
+	// Auto-detect the site, same logic as GetEnvVars.
+	sites, err := c.ListSites(projectID)
+	if err == nil && len(sites) == 1 {
+		return c.SetEnvVarsBySite(projectID, sites[0].ID, envVars)
+	}
+	if err == nil && len(sites) > 1 {
+		return fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
+	}
+
+	// Fallback: write to legacy project-level env_vars field.
 	envJSON, _ := json.Marshal(envVars)
 	body, _ := json.Marshal(map[string]string{"env_vars": string(envJSON)})
 	resp, err := c.authRequest("PUT", "/api/v1/projects/"+projectID+"/env", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed: %s", string(respBody))
+	}
+	return nil
+}
+
+// GetEnvVarsBySite fetches env vars for a specific site.
+func (c *Client) GetEnvVarsBySite(projectID, siteID string) (map[string]string, error) {
+	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID+"/sites/"+siteID+"/env", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		EnvVars map[string]string `json:"env_vars"`
+	}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if result.EnvVars == nil {
+		return make(map[string]string), nil
+	}
+	return result.EnvVars, nil
+}
+
+// SetEnvVarsBySite replaces all env vars for a specific site.
+func (c *Client) SetEnvVarsBySite(projectID, siteID string, envVars map[string]string) error {
+	envJSON, _ := json.Marshal(envVars)
+	body, _ := json.Marshal(map[string]string{"env_vars": string(envJSON)})
+	resp, err := c.authRequest("PUT", "/api/v1/projects/"+projectID+"/sites/"+siteID+"/env", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

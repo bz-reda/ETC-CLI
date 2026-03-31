@@ -17,6 +17,38 @@ var envCmd = &cobra.Command{
 	Short: "Manage environment variables",
 }
 
+// localConfig reads .espacetech.json and returns projectID + siteID (siteID may be empty for old configs).
+func localConfig() (projectID, siteID, name string, err error) {
+	data, readErr := os.ReadFile(".espacetech.json")
+	if readErr != nil {
+		return "", "", "", fmt.Errorf("no project config found — run 'espacetech init' first")
+	}
+	var cfg struct {
+		ProjectID string `json:"project_id"`
+		Name      string `json:"name"`
+		SiteID    string `json:"site_id"`
+	}
+	json.Unmarshal(data, &cfg)
+	return cfg.ProjectID, cfg.SiteID, cfg.Name, nil
+}
+
+// getEnvVars fetches env vars using site-scoped endpoint when siteID is known,
+// falling back to the legacy project endpoint for old .espacetech.json files.
+func getEnvVars(client *api.Client, projectID, siteID string) (map[string]string, error) {
+	if siteID != "" {
+		return client.GetEnvVarsBySite(projectID, siteID)
+	}
+	return client.GetEnvVars(projectID)
+}
+
+// setEnvVars saves env vars using site-scoped endpoint when siteID is known.
+func setEnvVars(client *api.Client, projectID, siteID string, vars map[string]string) error {
+	if siteID != "" {
+		return client.SetEnvVarsBySite(projectID, siteID, vars)
+	}
+	return client.SetEnvVars(projectID, vars)
+}
+
 var envSetCmd = &cobra.Command{
 	Use:   "set [KEY=VALUE...]",
 	Short: "Set environment variables",
@@ -28,27 +60,19 @@ var envSetCmd = &cobra.Command{
 			return
 		}
 
-		data, err := os.ReadFile(".espacetech.json")
+		projectID, siteID, _, err := localConfig()
 		if err != nil {
-			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+			fmt.Printf("❌ %v\n", err)
 			return
 		}
 
-		var projectCfg struct {
-			ProjectID string `json:"project_id"`
-			Name      string `json:"name"`
-		}
-		json.Unmarshal(data, &projectCfg)
-
 		client := api.NewClient(cfg)
 
-		// Get current env vars
-		current, err := client.GetEnvVars(projectCfg.ProjectID)
+		current, err := getEnvVars(client, projectID, siteID)
 		if err != nil {
 			current = make(map[string]string)
 		}
 
-		// Parse and merge new vars
 		for _, arg := range args {
 			parts := strings.SplitN(arg, "=", 2)
 			if len(parts) != 2 {
@@ -58,8 +82,7 @@ var envSetCmd = &cobra.Command{
 			current[parts[0]] = parts[1]
 		}
 
-		err = client.SetEnvVars(projectCfg.ProjectID, current)
-		if err != nil {
+		if err := setEnvVars(client, projectID, siteID, current); err != nil {
 			fmt.Printf("❌ Failed to set env vars: %v\n", err)
 			return
 		}
@@ -83,20 +106,14 @@ var envListCmd = &cobra.Command{
 			return
 		}
 
-		data, err := os.ReadFile(".espacetech.json")
+		projectID, siteID, name, err := localConfig()
 		if err != nil {
-			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+			fmt.Printf("❌ %v\n", err)
 			return
 		}
 
-		var projectCfg struct {
-			ProjectID string `json:"project_id"`
-			Name      string `json:"name"`
-		}
-		json.Unmarshal(data, &projectCfg)
-
 		client := api.NewClient(cfg)
-		envVars, err := client.GetEnvVars(projectCfg.ProjectID)
+		envVars, err := getEnvVars(client, projectID, siteID)
 		if err != nil {
 			fmt.Printf("❌ Failed to get env vars: %v\n", err)
 			return
@@ -107,7 +124,7 @@ var envListCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Printf("🔧 Environment variables for %s:\n\n", projectCfg.Name)
+		fmt.Printf("🔧 Environment variables for %s:\n\n", name)
 		for k, v := range envVars {
 			fmt.Printf("   %s=%s\n", k, v)
 		}
@@ -125,20 +142,14 @@ var envRemoveCmd = &cobra.Command{
 			return
 		}
 
-		data, err := os.ReadFile(".espacetech.json")
+		projectID, siteID, _, err := localConfig()
 		if err != nil {
-			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+			fmt.Printf("❌ %v\n", err)
 			return
 		}
 
-		var projectCfg struct {
-			ProjectID string `json:"project_id"`
-			Name      string `json:"name"`
-		}
-		json.Unmarshal(data, &projectCfg)
-
 		client := api.NewClient(cfg)
-		current, err := client.GetEnvVars(projectCfg.ProjectID)
+		current, err := getEnvVars(client, projectID, siteID)
 		if err != nil {
 			fmt.Printf("❌ Failed to get env vars: %v\n", err)
 			return
@@ -149,8 +160,7 @@ var envRemoveCmd = &cobra.Command{
 			fmt.Printf("   Removed: %s\n", key)
 		}
 
-		err = client.SetEnvVars(projectCfg.ProjectID, current)
-		if err != nil {
+		if err := setEnvVars(client, projectID, siteID, current); err != nil {
 			fmt.Printf("❌ Failed to update env vars: %v\n", err)
 			return
 		}

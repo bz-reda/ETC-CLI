@@ -33,16 +33,13 @@ var domainAddCmd = &cobra.Command{
 			return
 		}
 
-		var projectCfg struct {
-			ProjectID string `json:"project_id"`
-			Name      string `json:"name"`
-		}
+		var projectCfg ProjectConfig
 		json.Unmarshal(data, &projectCfg)
 
 		client := api.NewClient(cfg)
 		domain := args[0]
 
-		err = client.AddDomain(projectCfg.ProjectID, domain)
+		err = client.AddDomain(projectCfg.ProjectID, projectCfg.SiteID, domain)
 		if err != nil {
 			fmt.Printf("❌ Failed to add domain: %v\n", err)
 			return
@@ -72,10 +69,7 @@ var domainListCmd = &cobra.Command{
 			return
 		}
 
-		var projectCfg struct {
-			ProjectID string `json:"project_id"`
-			Name      string `json:"name"`
-		}
+		var projectCfg ProjectConfig
 		json.Unmarshal(data, &projectCfg)
 
 		client := api.NewClient(cfg)
