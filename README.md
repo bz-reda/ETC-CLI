@@ -8,7 +8,7 @@ Command-line tool for deploying and managing applications on [Espace-Tech Cloud]
 curl -fsSL https://cloud.espace-tech.com/install.sh | sh
 ```
 
-Or download manually from [Releases](https://github.com/bz-reda/espace-tech-cli/releases).
+Or download manually from [Releases](https://github.com/bz-reda/ETC-CLI/releases).
 
 ## Quick Start
 
@@ -43,8 +43,8 @@ For full documentation, visit [docs.cloud.espace-tech.com/cli](https://docs.clou
 ## Building from Source
 
 ```bash
-git clone https://github.com/bz-reda/espace-tech-cli.git
-cd espace-tech-cli
+git clone https://github.com/bz-reda/ETC-CLI.git
+cd ETC-CLI
 make build
 ./espacetech version
 ```
