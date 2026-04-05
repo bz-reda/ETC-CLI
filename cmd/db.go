@@ -29,20 +29,33 @@ var dbCreateCmd = &cobra.Command{
 			return
 		}
 
+		// Read project_id from .espacetech.json
+		projectID := ""
+		data, err := os.ReadFile(".espacetech.json")
+		if err == nil {
+			var projectCfg struct {
+				ProjectID string `json:"project_id"`
+			}
+			json.Unmarshal(data, &projectCfg)
+			projectID = projectCfg.ProjectID
+		}
+		if projectID == "" {
+			fmt.Println("❌ No .espacetech.json found. Run 'espacetech init' first or run this command from a project directory.")
+			return
+		}
+
 		client := api.NewClient(cfg)
-		db, err := client.CreateDatabase(args[0], dbCreateType)
+		db, err := client.CreateDatabase(args[0], dbCreateType, projectID)
 		if err != nil {
 			fmt.Printf("❌ Failed to create database: %v\n", err)
 			return
 		}
 
-		fmt.Printf("✅ Created %s database '%s'\n", db.Type, db.Name)
+		fmt.Printf("✅ Created %s database '%s' (linked to project)\n", db.Type, db.Name)
 		fmt.Printf("   ID:      %s\n", db.ID)
 		fmt.Printf("   Host:    %s\n", db.Host)
 		fmt.Printf("   Port:    %d\n", db.Port)
 		fmt.Printf("   Status:  %s\n", db.Status)
-		fmt.Println("\n📋 Next: link to a project with:")
-		fmt.Printf("   espacetech db link %s --project <project-name>\n", args[0])
 	},
 }
 

@@ -538,8 +538,8 @@ type DatabaseInfo struct {
 	CreatedAt   string `json:"created_at"`
 }
 
-func (c *Client) CreateDatabase(name, dbType string) (*DatabaseInfo, error) {
-	body, _ := json.Marshal(map[string]string{"name": name, "type": dbType})
+func (c *Client) CreateDatabase(name, dbType, projectID string) (*DatabaseInfo, error) {
+	body, _ := json.Marshal(map[string]string{"name": name, "type": dbType, "project_id": projectID})
 	resp, err := c.authRequest("POST", "/api/v1/databases", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
