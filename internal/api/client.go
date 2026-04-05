@@ -755,8 +755,8 @@ type BucketInfo struct {
 	CreatedAt         string `json:"created_at"`
 }
 
-func (c *Client) CreateBucket(name string) (*BucketInfo, error) {
-	body, _ := json.Marshal(map[string]string{"name": name})
+func (c *Client) CreateBucket(name, projectID string) (*BucketInfo, error) {
+	body, _ := json.Marshal(map[string]string{"name": name, "project_id": projectID})
 	resp, err := c.authRequest("POST", "/api/v1/storage", bytes.NewReader(body))
 	if err != nil {
 		return nil, err

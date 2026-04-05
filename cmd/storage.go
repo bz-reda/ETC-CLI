@@ -27,21 +27,33 @@ var storageCreateCmd = &cobra.Command{
 			return
 		}
 
+		// Read project_id from .espacetech.json
+		projectID := ""
+		data, err := os.ReadFile(".espacetech.json")
+		if err == nil {
+			var projectCfg struct {
+				ProjectID string `json:"project_id"`
+			}
+			json.Unmarshal(data, &projectCfg)
+			projectID = projectCfg.ProjectID
+		}
+		if projectID == "" {
+			fmt.Println("❌ No .espacetech.json found. Run 'espacetech init' first or run this command from a project directory.")
+			return
+		}
+
 		client := api.NewClient(cfg)
-		bucket, err := client.CreateBucket(args[0])
+		bucket, err := client.CreateBucket(args[0], projectID)
 		if err != nil {
 			fmt.Printf("❌ Failed to create bucket: %v\n", err)
 			return
 		}
 
-		fmt.Printf("✅ Created storage bucket '%s'\n", bucket.Name)
+		fmt.Printf("✅ Created storage bucket '%s' (linked to project)\n", bucket.Name)
 		fmt.Printf("   ID:       %s\n", bucket.ID)
 		fmt.Printf("   Bucket:   %s\n", bucket.GarageBucket)
 		fmt.Printf("   Limit:    %s\n", formatBytes(bucket.StorageLimitBytes))
 		fmt.Printf("   Status:   %s\n", bucket.Status)
-		fmt.Println("\n📋 Next steps:")
-		fmt.Printf("   espacetech storage credentials %s    # get S3 credentials\n", args[0])
-		fmt.Printf("   espacetech storage link %s --project <name>  # link to project\n", args[0])
 	},
 }
 
