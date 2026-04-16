@@ -357,60 +357,31 @@ func (c *Client) RemoveDomain(projectID, domain string) error {
 }
 
 func (c *Client) GetEnvVars(projectID string) (map[string]string, error) {
-	// Auto-detect the site: if the project has exactly one site, use the
-	// site-scoped endpoint (which is where the dashboard stores env vars).
 	sites, err := c.ListSites(projectID)
-	if err == nil && len(sites) == 1 {
-		return c.GetEnvVarsBySite(projectID, sites[0].ID)
-	}
-	if err == nil && len(sites) > 1 {
-		// Multiple sites — caller should pass a site_id explicitly.
-		return nil, fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
-	}
-
-	// Fallback: read from the legacy project-level env_vars field.
-	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
-
-	var project struct {
-		EnvVars string `json:"env_vars"`
+	if len(sites) == 0 {
+		return nil, fmt.Errorf("project has no sites")
 	}
-	json.NewDecoder(resp.Body).Decode(&project)
-
-	result := make(map[string]string)
-	if project.EnvVars != "" && project.EnvVars != "{}" {
-		json.Unmarshal([]byte(project.EnvVars), &result)
+	if len(sites) > 1 {
+		return nil, fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
 	}
-	return result, nil
+	return c.GetEnvVarsBySite(projectID, sites[0].ID)
 }
 
 func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
-	// Auto-detect the site, same logic as GetEnvVars.
 	sites, err := c.ListSites(projectID)
-	if err == nil && len(sites) == 1 {
-		return c.SetEnvVarsBySite(projectID, sites[0].ID, envVars)
-	}
-	if err == nil && len(sites) > 1 {
-		return fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
-	}
-
-	// Fallback: write to legacy project-level env_vars field.
-	envJSON, _ := json.Marshal(envVars)
-	body, _ := json.Marshal(map[string]string{"env_vars": string(envJSON)})
-	resp, err := c.authRequest("PUT", "/api/v1/projects/"+projectID+"/env", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != 200 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("failed: %s", string(respBody))
+	if len(sites) == 0 {
+		return fmt.Errorf("project has no sites")
 	}
-	return nil
+	if len(sites) > 1 {
+		return fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
+	}
+	return c.SetEnvVarsBySite(projectID, sites[0].ID, envVars)
 }
 
 // GetEnvVarsBySite fetches env vars for a specific site.
