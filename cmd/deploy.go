@@ -110,7 +110,9 @@ var deployCmd = &cobra.Command{
 			// No config in CWD - check if inside a monorepo
 			monorepoRoot := findMonorepoRoot(cwd)
 			if monorepoRoot == "" {
-				fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+				fmt.Println("❌ No project config found.")
+				fmt.Println("   • New project?       run 'espacetech init'")
+				fmt.Println("   • Existing project?  run 'espacetech link'")
 				return
 			}
 
