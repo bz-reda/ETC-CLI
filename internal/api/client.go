@@ -179,11 +179,9 @@ func (c *Client) CreateSite(projectID, name string) (*Site, error) {
 		return nil, fmt.Errorf("%s", errResp["error"])
 	}
 
-	var result struct {
-		Site Site `json:"site"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	return &result.Site, nil
+	var site Site
+	json.NewDecoder(resp.Body).Decode(&site)
+	return &site, nil
 }
 
 func (c *Client) ListSites(projectID string) ([]Site, error) {
@@ -193,11 +191,14 @@ func (c *Client) ListSites(projectID string) ([]Site, error) {
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Sites []Site `json:"sites"`
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list sites (status %d): %s", resp.StatusCode, string(respBody))
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	return result.Sites, nil
+
+	var sites []Site
+	json.NewDecoder(resp.Body).Decode(&sites)
+	return sites, nil
 }
 
 // Domains
