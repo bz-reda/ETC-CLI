@@ -506,11 +506,19 @@ type DatabaseInfo struct {
 	CPULimit    string `json:"cpu_limit"`
 	MemoryLimit string `json:"memory_limit"`
 	ProjectID   string `json:"project_id,omitempty"`
+	ReplicaSet  bool   `json:"replica_set,omitempty"`
 	CreatedAt   string `json:"created_at"`
 }
 
-func (c *Client) CreateDatabase(name, dbType, projectID string) (*DatabaseInfo, error) {
-	body, _ := json.Marshal(map[string]string{"name": name, "type": dbType, "project_id": projectID})
+// CreateDatabase creates a managed database. replicaSet is only meaningful for
+// MongoDB and is sent only when non-nil so the server's default (true for new
+// MongoDB instances) applies when the caller doesn't override it.
+func (c *Client) CreateDatabase(name, dbType, projectID string, replicaSet *bool) (*DatabaseInfo, error) {
+	payload := map[string]interface{}{"name": name, "type": dbType, "project_id": projectID}
+	if replicaSet != nil {
+		payload["replica_set"] = *replicaSet
+	}
+	body, _ := json.Marshal(payload)
 	resp, err := c.authRequest("POST", "/api/v1/databases", bytes.NewReader(body))
 	if err != nil {
 		return nil, err

@@ -17,6 +17,7 @@ var dbCmd = &cobra.Command{
 }
 
 var dbCreateType string
+var dbCreateReplicaSet bool
 
 var dbCreateCmd = &cobra.Command{
 	Use:   "create [name]",
@@ -44,8 +45,17 @@ var dbCreateCmd = &cobra.Command{
 			return
 		}
 
+		// Only send --replica-set to the server when the user explicitly set
+		// it; otherwise let the server apply its default (true for mongodb,
+		// ignored for other types).
+		var replicaSet *bool
+		if cmd.Flags().Changed("replica-set") {
+			v := dbCreateReplicaSet
+			replicaSet = &v
+		}
+
 		client := api.NewClient(cfg)
-		db, err := client.CreateDatabase(args[0], dbCreateType, projectID)
+		db, err := client.CreateDatabase(args[0], dbCreateType, projectID, replicaSet)
 		if err != nil {
 			fmt.Printf("❌ Failed to create database: %v\n", err)
 			return
@@ -56,7 +66,17 @@ var dbCreateCmd = &cobra.Command{
 		fmt.Printf("   Host:    %s\n", db.Host)
 		fmt.Printf("   Port:    %d\n", db.Port)
 		fmt.Printf("   Status:  %s\n", db.Status)
+		if db.Type == "mongodb" {
+			fmt.Printf("   Mode:    %s\n", mongoModeLabel(db.ReplicaSet))
+		}
 	},
+}
+
+func mongoModeLabel(replicaSet bool) string {
+	if replicaSet {
+		return "replica set (rs0) — transactions supported"
+	}
+	return "standalone — transactions NOT supported"
 }
 
 var dbListCmd = &cobra.Command{
@@ -475,6 +495,7 @@ var dbRotateCmd = &cobra.Command{
 
 func init() {
 	dbCreateCmd.Flags().StringVarP(&dbCreateType, "type", "t", "postgres", "Database type: postgres, redis, mongodb")
+	dbCreateCmd.Flags().BoolVar(&dbCreateReplicaSet, "replica-set", true, "MongoDB only: run as a single-node replica set (rs0). Default true so multi-document transactions work. Pass --replica-set=false for a standalone mongod.")
 	dbLinkCmd.Flags().StringVarP(&dbLinkProject, "project", "p", "", "Project name or slug (defaults to current directory's project)")
 
 	dbCmd.AddCommand(dbCreateCmd)
