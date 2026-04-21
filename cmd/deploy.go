@@ -171,7 +171,10 @@ var deployCmd = &cobra.Command{
 
 		client := api.NewClient(cfg)
 
-		resp, err := client.Deploy(projCfg.ProjectID, projCfg.SiteID, sourceDir, "CLI deploy", deployProd, rootDirectory)
+		rules := api.LoadIgnoreRules(sourceDir)
+		printIgnoreRules(rules)
+
+		resp, err := client.Deploy(projCfg.ProjectID, projCfg.SiteID, sourceDir, "CLI deploy", deployProd, rootDirectory, rules)
 		if err != nil {
 			fmt.Printf("❌ Deploy failed: %v\n", err)
 			return
@@ -222,4 +225,20 @@ var deployCmd = &cobra.Command{
 func init() {
 	deployCmd.Flags().BoolVarP(&deployProd, "prod", "p", false, "Deploy to production")
 	rootCmd.AddCommand(deployCmd)
+}
+
+func printIgnoreRules(rules *api.IgnoreRules) {
+	fmt.Printf("📋 Baseline ignore: %s\n", strings.Join(api.BaselineIgnoreDirs, ", "))
+	if rules == nil || rules.Source == "" {
+		fmt.Println("   (no .espacetechignore or .dockerignore found)")
+		return
+	}
+	if len(rules.Patterns) == 0 {
+		fmt.Printf("   %s is present but empty\n", rules.Source)
+		return
+	}
+	fmt.Printf("   Applying %s:\n", rules.Source)
+	for _, p := range rules.Patterns {
+		fmt.Printf("     • %s\n", p)
+	}
 }

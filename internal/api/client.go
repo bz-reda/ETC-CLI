@@ -231,11 +231,11 @@ type DeployResponse struct {
 	Message      string `json:"message"`
 }
 
-func (c *Client) Deploy(projectID, siteID, sourceDir, commitMessage string, isProduction bool, rootDirectory string) (*DeployResponse, error) {
+func (c *Client) Deploy(projectID, siteID, sourceDir, commitMessage string, isProduction bool, rootDirectory string, rules *IgnoreRules) (*DeployResponse, error) {
 	tarPath := filepath.Join(os.TempDir(), "paas-source.tar.gz")
 	defer os.Remove(tarPath)
 
-	if err := createTarball(sourceDir, tarPath); err != nil {
+	if err := createTarball(sourceDir, tarPath, rules); err != nil {
 		return nil, fmt.Errorf("failed to create tarball: %w", err)
 	}
 
