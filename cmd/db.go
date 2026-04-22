@@ -496,7 +496,8 @@ var dbRotateCmd = &cobra.Command{
 func init() {
 	dbCreateCmd.Flags().StringVarP(&dbCreateType, "type", "t", "postgres", "Database type: postgres, redis, mongodb")
 	dbCreateCmd.Flags().BoolVar(&dbCreateReplicaSet, "replica-set", true, "MongoDB only: run as a single-node replica set (rs0). Default true so multi-document transactions work. Pass --replica-set=false for a standalone mongod.")
-	dbLinkCmd.Flags().StringVarP(&dbLinkProject, "project", "p", "", "Project name or slug (defaults to current directory's project)")
+	// --project has no short form; -p is reserved for --prod on `deploy`.
+	dbLinkCmd.Flags().StringVar(&dbLinkProject, "project", "", "Project name or slug (defaults to current directory's project)")
 
 	dbCmd.AddCommand(dbCreateCmd)
 	dbCmd.AddCommand(dbListCmd)

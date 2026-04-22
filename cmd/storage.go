@@ -414,7 +414,8 @@ func formatBytes(b int64) string {
 }
 
 func init() {
-	storageLinkCmd.Flags().StringVarP(&storageLinkProject, "project", "p", "", "Project name or slug")
+	// --project has no short form; -p is reserved for --prod on `deploy`.
+	storageLinkCmd.Flags().StringVar(&storageLinkProject, "project", "", "Project name or slug")
 
 	storageCmd.AddCommand(storageCreateCmd)
 	storageCmd.AddCommand(storageListCmd)

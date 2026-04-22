@@ -186,76 +186,90 @@ var envListCmd = &cobra.Command{
 	},
 }
 
-var envRemoveCmd = &cobra.Command{
-	Use:   "remove [KEY...]",
-	Short: "Remove environment variables",
+func runEnvDelete(cmd *cobra.Command, args []string) {
+	cfg := config.Load()
+	if cfg.Token == "" {
+		fmt.Println("❌ Please login first: espacetech login")
+		return
+	}
+
+	projectID, siteID, _, err := localConfig()
+	if err != nil {
+		fmt.Printf("❌ %v\n", err)
+		return
+	}
+
+	client := api.NewClient(cfg)
+	snap, err := getEnvVarsSnapshot(client, projectID, siteID)
+	if err != nil {
+		fmt.Printf("❌ Failed to get env vars: %v\n", err)
+		return
+	}
+
+	btSet := make(map[string]bool, len(snap.BuildTimeKeys))
+	for _, k := range snap.BuildTimeKeys {
+		btSet[k] = true
+	}
+
+	// Split requested keys into present vs missing so the one-line diff
+	// reflects what will actually change on the server. Missing keys
+	// are a no-op but worth noting in case the user made a typo.
+	var willRemove, notFound []string
+	for _, key := range args {
+		if _, present := snap.Values[key]; present {
+			willRemove = append(willRemove, key)
+		} else {
+			notFound = append(notFound, key)
+		}
+	}
+	sort.Strings(willRemove)
+	sort.Strings(notFound)
+
+	if len(willRemove) == 0 {
+		fmt.Printf("Nothing to remove — none of [%s] are currently set.\n", strings.Join(args, ", "))
+		return
+	}
+	fmt.Printf("Removing %d env var(s): %s\n", len(willRemove), strings.Join(willRemove, ", "))
+	if len(notFound) > 0 {
+		fmt.Printf("Skipped %d unknown key(s): %s\n", len(notFound), strings.Join(notFound, ", "))
+	}
+
+	for _, key := range willRemove {
+		delete(snap.Values, key)
+		delete(btSet, key)
+	}
+
+	var btKeys []string
+	for k := range btSet {
+		btKeys = append(btKeys, k)
+	}
+	sort.Strings(btKeys)
+
+	if err := setEnvVarsWithBuildTime(client, projectID, siteID, snap.Values, btKeys, false); err != nil {
+		fmt.Printf("❌ Failed to update env vars: %v\n", err)
+		return
+	}
+
+	fmt.Println("✅ Environment variables updated")
+	fmt.Println("🔄 Redeploy to apply: espacetech deploy --prod")
+}
+
+var envDeleteCmd = &cobra.Command{
+	Use:   "delete [KEY...]",
+	Short: "Delete environment variables",
 	Args:  requireAtLeastOneArg("KEY", "env list"),
+	Run:   runEnvDelete,
+}
+
+// envRemoveCmd is the deprecated alias; hidden.
+var envRemoveCmd = &cobra.Command{
+	Use:    "remove [KEY...]",
+	Short:  "(deprecated) alias for 'env delete'",
+	Hidden: true,
+	Args:   requireAtLeastOneArg("KEY", "env list"),
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg := config.Load()
-		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
-			return
-		}
-
-		projectID, siteID, _, err := localConfig()
-		if err != nil {
-			fmt.Printf("❌ %v\n", err)
-			return
-		}
-
-		client := api.NewClient(cfg)
-		snap, err := getEnvVarsSnapshot(client, projectID, siteID)
-		if err != nil {
-			fmt.Printf("❌ Failed to get env vars: %v\n", err)
-			return
-		}
-
-		btSet := make(map[string]bool, len(snap.BuildTimeKeys))
-		for _, k := range snap.BuildTimeKeys {
-			btSet[k] = true
-		}
-
-		// Split requested keys into present vs missing so the one-line diff
-		// reflects what will actually change on the server. Missing keys
-		// are a no-op but worth noting in case the user made a typo.
-		var willRemove, notFound []string
-		for _, key := range args {
-			if _, present := snap.Values[key]; present {
-				willRemove = append(willRemove, key)
-			} else {
-				notFound = append(notFound, key)
-			}
-		}
-		sort.Strings(willRemove)
-		sort.Strings(notFound)
-
-		if len(willRemove) == 0 {
-			fmt.Printf("Nothing to remove — none of [%s] are currently set.\n", strings.Join(args, ", "))
-			return
-		}
-		fmt.Printf("Removing %d env var(s): %s\n", len(willRemove), strings.Join(willRemove, ", "))
-		if len(notFound) > 0 {
-			fmt.Printf("Skipped %d unknown key(s): %s\n", len(notFound), strings.Join(notFound, ", "))
-		}
-
-		for _, key := range willRemove {
-			delete(snap.Values, key)
-			delete(btSet, key)
-		}
-
-		var btKeys []string
-		for k := range btSet {
-			btKeys = append(btKeys, k)
-		}
-		sort.Strings(btKeys)
-
-		if err := setEnvVarsWithBuildTime(client, projectID, siteID, snap.Values, btKeys, false); err != nil {
-			fmt.Printf("❌ Failed to update env vars: %v\n", err)
-			return
-		}
-
-		fmt.Println("✅ Environment variables updated")
-		fmt.Println("🔄 Redeploy to apply: espacetech deploy --prod")
+		maybeWarnDeprecated("env remove", "env delete", "v0.3.0")
+		runEnvDelete(cmd, args)
 	},
 }
 
@@ -453,7 +467,8 @@ func init() {
 
 	envCmd.AddCommand(envSetCmd)
 	envCmd.AddCommand(envListCmd)
-	envCmd.AddCommand(envRemoveCmd)
+	envCmd.AddCommand(envDeleteCmd)
+	envCmd.AddCommand(envRemoveCmd) // hidden deprecated alias
 	envCmd.AddCommand(envImportCmd)
 	rootCmd.AddCommand(envCmd)
 }

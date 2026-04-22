@@ -458,7 +458,10 @@ func findAuthAppByName(client *api.Client, name string) (*api.AuthAppInfo, error
 }
 
 func init() {
-	authCreateCmd.Flags().StringVarP(&authProject, "project", "p", "", "Project name or slug")
+	// --project has no short form: -p is reserved for --prod on `deploy`,
+	// and silently aliasing --project to -p here (or vice-versa) is a
+	// muscle-memory footgun across commands.
+	authCreateCmd.Flags().StringVar(&authProject, "project", "", "Project name or slug")
 	authCreateCmd.Flags().StringVar(&authAppSlug, "app-id", "", "App slug/identifier (required)")
 	authCreateCmd.MarkFlagRequired("app-id")
 
