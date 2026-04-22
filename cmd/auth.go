@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
-	"encoding/json"
+	"regexp"
+	"sort"
 	"strings"
 
 	"paas-cli/internal/api"
@@ -11,6 +13,40 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// secretLikeKeyRegex flags map keys whose values should not be echoed to the
+// terminal after an update. Mirrors the paas-api build-time secret heuristic
+// but tightened for the narrower "are we about to print this to a user's
+// screen" decision — we accept a few false positives to avoid leaking OAuth
+// secrets in the common `auth config` confirmation.
+var secretLikeKeyRegex = regexp.MustCompile(`(?i)(secret|password|token|private_key)`)
+
+// looksLikeSecret reports whether a map key name hints that its value is
+// sensitive enough to redact from echoed terminal output.
+func looksLikeSecret(key string) bool {
+	return secretLikeKeyRegex.MatchString(key)
+}
+
+// formatUpdatesList returns one "key = value" string per entry, redacting
+// the value when the key name looks like a secret. Keys are sorted so the
+// output is deterministic (helps tests and user scanning).
+func formatUpdatesList(updates map[string]interface{}) []string {
+	keys := make([]string, 0, len(updates))
+	for k := range updates {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	lines := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if looksLikeSecret(k) {
+			lines = append(lines, fmt.Sprintf("%s = <redacted>", k))
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("%s = %v", k, updates[k]))
+	}
+	return lines
+}
 
 var authCmd = &cobra.Command{
 	Use:   "auth",
@@ -20,7 +56,7 @@ var authCmd = &cobra.Command{
 var authCreateCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a managed auth service for a project",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", ""),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -118,7 +154,7 @@ var authListCmd = &cobra.Command{
 var authInfoCmd = &cobra.Command{
 	Use:   "info [name]",
 	Short: "Show auth app details and endpoints",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -190,7 +226,7 @@ var (
 var authConfigCmd = &cobra.Command{
 	Use:   "config [name]",
 	Short: "Configure an auth app (OAuth providers, settings)",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -254,8 +290,8 @@ var authConfigCmd = &cobra.Command{
 		}
 
 		fmt.Printf("✅ Auth app '%s' updated\n", args[0])
-		for k, v := range updates {
-			fmt.Printf("   %s = %v\n", k, v)
+		for _, line := range formatUpdatesList(updates) {
+			fmt.Printf("   %s\n", line)
 		}
 	},
 }
@@ -263,7 +299,7 @@ var authConfigCmd = &cobra.Command{
 var authUsersCmd = &cobra.Command{
 	Use:   "users [name]",
 	Short: "List users for an auth app",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -307,7 +343,7 @@ var authUsersCmd = &cobra.Command{
 var authStatsCmd = &cobra.Command{
 	Use:   "stats [name]",
 	Short: "Show auth app statistics",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -338,7 +374,7 @@ var authStatsCmd = &cobra.Command{
 var authDeleteCmd = &cobra.Command{
 	Use:   "delete [name]",
 	Short: "Delete an auth app and all its users",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -374,7 +410,7 @@ var authDeleteCmd = &cobra.Command{
 var authRotateKeysCmd = &cobra.Command{
 	Use:   "rotate-keys [name]",
 	Short: "Rotate JWT signing keys for an auth app",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -422,7 +458,10 @@ func findAuthAppByName(client *api.Client, name string) (*api.AuthAppInfo, error
 }
 
 func init() {
-	authCreateCmd.Flags().StringVarP(&authProject, "project", "p", "", "Project name or slug")
+	// --project has no short form: -p is reserved for --prod on `deploy`,
+	// and silently aliasing --project to -p here (or vice-versa) is a
+	// muscle-memory footgun across commands.
+	authCreateCmd.Flags().StringVar(&authProject, "project", "", "Project name or slug")
 	authCreateCmd.Flags().StringVar(&authAppSlug, "app-id", "", "App slug/identifier (required)")
 	authCreateCmd.MarkFlagRequired("app-id")
 

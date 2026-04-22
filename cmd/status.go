@@ -31,7 +31,8 @@ var statusCmd = &cobra.Command{
 			return
 		}
 
-		fmt.Println("📋 Your projects:\n")
+		fmt.Println("📋 Your projects:")
+		fmt.Println()
 		for _, p := range projects {
 			fmt.Printf("  %-20s %-15s %s\n", p.Name, p.Framework, p.Slug)
 		}

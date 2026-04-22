@@ -17,11 +17,12 @@ var dbCmd = &cobra.Command{
 }
 
 var dbCreateType string
+var dbCreateReplicaSet bool
 
 var dbCreateCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a managed database",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", ""),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -44,8 +45,17 @@ var dbCreateCmd = &cobra.Command{
 			return
 		}
 
+		// Only send --replica-set to the server when the user explicitly set
+		// it; otherwise let the server apply its default (true for mongodb,
+		// ignored for other types).
+		var replicaSet *bool
+		if cmd.Flags().Changed("replica-set") {
+			v := dbCreateReplicaSet
+			replicaSet = &v
+		}
+
 		client := api.NewClient(cfg)
-		db, err := client.CreateDatabase(args[0], dbCreateType, projectID)
+		db, err := client.CreateDatabase(args[0], dbCreateType, projectID, replicaSet)
 		if err != nil {
 			fmt.Printf("❌ Failed to create database: %v\n", err)
 			return
@@ -56,7 +66,17 @@ var dbCreateCmd = &cobra.Command{
 		fmt.Printf("   Host:    %s\n", db.Host)
 		fmt.Printf("   Port:    %d\n", db.Port)
 		fmt.Printf("   Status:  %s\n", db.Status)
+		if db.Type == "mongodb" {
+			fmt.Printf("   Mode:    %s\n", mongoModeLabel(db.ReplicaSet))
+		}
 	},
+}
+
+func mongoModeLabel(replicaSet bool) string {
+	if replicaSet {
+		return "replica set (rs0) — transactions supported"
+	}
+	return "standalone — transactions NOT supported"
 }
 
 var dbListCmd = &cobra.Command{
@@ -95,7 +115,7 @@ var dbListCmd = &cobra.Command{
 var dbInfoCmd = &cobra.Command{
 	Use:   "info [name]",
 	Short: "Show database details",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -135,7 +155,7 @@ var dbLinkProject string
 var dbLinkCmd = &cobra.Command{
 	Use:   "link [db-name]",
 	Short: "Link a database to a project",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("db-name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -196,7 +216,7 @@ var dbLinkCmd = &cobra.Command{
 var dbUnlinkCmd = &cobra.Command{
 	Use:   "unlink [db-name]",
 	Short: "Unlink a database from its project",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("db-name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -224,7 +244,7 @@ var dbUnlinkCmd = &cobra.Command{
 var dbDeleteCmd = &cobra.Command{
 	Use:   "delete [name]",
 	Short: "Delete a database and all its data",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -274,7 +294,7 @@ func findDatabaseByName(client *api.Client, name string) (*api.DatabaseInfo, err
 var dbExposeCmd = &cobra.Command{
 	Use:   "expose [name]",
 	Short: "Enable external access to a database",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -307,7 +327,7 @@ var dbExposeCmd = &cobra.Command{
 var dbUnexposeCmd = &cobra.Command{
 	Use:   "unexpose [name]",
 	Short: "Disable external access to a database",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -335,7 +355,7 @@ var dbUnexposeCmd = &cobra.Command{
 var dbCredentialsCmd = &cobra.Command{
 	Use:   "credentials [name]",
 	Short: "Show database connection credentials",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -380,7 +400,7 @@ var dbCredentialsCmd = &cobra.Command{
 var dbStopCmd = &cobra.Command{
 	Use:   "stop [name]",
 	Short: "Stop a database (preserves data)",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -409,7 +429,7 @@ var dbStopCmd = &cobra.Command{
 var dbStartCmd = &cobra.Command{
 	Use:   "start [name]",
 	Short: "Start a stopped database",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -437,7 +457,7 @@ var dbStartCmd = &cobra.Command{
 var dbRotateCmd = &cobra.Command{
 	Use:   "rotate [name]",
 	Short: "Rotate database password",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "db list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -475,7 +495,9 @@ var dbRotateCmd = &cobra.Command{
 
 func init() {
 	dbCreateCmd.Flags().StringVarP(&dbCreateType, "type", "t", "postgres", "Database type: postgres, redis, mongodb")
-	dbLinkCmd.Flags().StringVarP(&dbLinkProject, "project", "p", "", "Project name or slug (defaults to current directory's project)")
+	dbCreateCmd.Flags().BoolVar(&dbCreateReplicaSet, "replica-set", true, "MongoDB only: run as a single-node replica set (rs0). Default true so multi-document transactions work. Pass --replica-set=false for a standalone mongod.")
+	// --project has no short form; -p is reserved for --prod on `deploy`.
+	dbLinkCmd.Flags().StringVar(&dbLinkProject, "project", "", "Project name or slug (defaults to current directory's project)")
 
 	dbCmd.AddCommand(dbCreateCmd)
 	dbCmd.AddCommand(dbListCmd)
