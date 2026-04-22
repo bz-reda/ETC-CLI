@@ -19,12 +19,14 @@ import (
 var deployProd bool
 
 type projectConfig struct {
-	ProjectID string `json:"project_id"`
-	Name      string `json:"name"`
-	Slug      string `json:"slug"`
-	SiteID    string `json:"site_id,omitempty"`
-	SiteName  string `json:"site_name,omitempty"`
-	SiteSlug  string `json:"site_slug,omitempty"`
+	ProjectID     string `json:"project_id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	SiteID        string `json:"site_id,omitempty"`
+	SiteName      string `json:"site_name,omitempty"`
+	SiteSlug      string `json:"site_slug,omitempty"`
+	RootDirectory string `json:"root_directory,omitempty"` // app subdir when .espacetech.json lives at monorepo root
+	Framework     string `json:"framework,omitempty"`      // recorded from init; server still auto-detects
 }
 
 type appChoice struct {
@@ -155,8 +157,12 @@ var deployCmd = &cobra.Command{
 		sourceDir := appDir
 		rootDirectory := ""
 
-		monorepoRoot := findMonorepoRoot(appDir)
-		if monorepoRoot != "" && monorepoRoot != appDir {
+		if projCfg.RootDirectory != "" {
+			// Config is at the monorepo root and explicitly points at an app subdir.
+			rootDirectory = projCfg.RootDirectory
+			fmt.Printf("🚀 Deploying %s (monorepo: %s, from config)...\n", projCfg.Name, rootDirectory)
+		} else if monorepoRoot := findMonorepoRoot(appDir); monorepoRoot != "" && monorepoRoot != appDir {
+			// Config is at the app subdir; derive rootDirectory from filesystem layout.
 			relPath, _ := filepath.Rel(monorepoRoot, appDir)
 			rootDirectory = relPath
 			sourceDir = monorepoRoot
