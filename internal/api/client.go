@@ -357,7 +357,38 @@ func (c *Client) RemoveDomain(projectID, domain string) error {
 	return nil
 }
 
+// EnvVarsSnapshot captures both the key→value map and the set of keys that
+// are marked build-time (forwarded to the Docker build as --build-arg).
+type EnvVarsSnapshot struct {
+	Values        map[string]string
+	BuildTimeKeys []string
+}
+
+// IsBuildTime reports whether `key` is marked as a build-time var.
+func (s *EnvVarsSnapshot) IsBuildTime(key string) bool {
+	for _, k := range s.BuildTimeKeys {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Client) GetEnvVars(projectID string) (map[string]string, error) {
+	snap, err := c.GetEnvVarsSnapshot(projectID)
+	if err != nil {
+		return nil, err
+	}
+	return snap.Values, nil
+}
+
+func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
+	return c.SetEnvVarsWithBuildTime(projectID, envVars, nil, false)
+}
+
+// GetEnvVarsSnapshot fetches values + build-time markers for the project's
+// site. Returns an error if the project has more than one site.
+func (c *Client) GetEnvVarsSnapshot(projectID string) (*EnvVarsSnapshot, error) {
 	sites, err := c.ListSites(projectID)
 	if err != nil {
 		return nil, err
@@ -368,10 +399,11 @@ func (c *Client) GetEnvVars(projectID string) (map[string]string, error) {
 	if len(sites) > 1 {
 		return nil, fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
 	}
-	return c.GetEnvVarsBySite(projectID, sites[0].ID)
+	return c.GetEnvVarsSnapshotBySite(projectID, sites[0].ID)
 }
 
-func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
+// SetEnvVarsWithBuildTime is the richer form that carries build-time markers.
+func (c *Client) SetEnvVarsWithBuildTime(projectID string, envVars map[string]string, buildTimeKeys []string, force bool) error {
 	sites, err := c.ListSites(projectID)
 	if err != nil {
 		return err
@@ -382,11 +414,21 @@ func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
 	if len(sites) > 1 {
 		return fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
 	}
-	return c.SetEnvVarsBySite(projectID, sites[0].ID, envVars)
+	return c.SetEnvVarsBySiteWithBuildTime(projectID, sites[0].ID, envVars, buildTimeKeys, force)
 }
 
-// GetEnvVarsBySite fetches env vars for a specific site.
+// GetEnvVarsBySite fetches env vars for a specific site (values only —
+// kept for callers that don't care about the build-time distinction).
 func (c *Client) GetEnvVarsBySite(projectID, siteID string) (map[string]string, error) {
+	snap, err := c.GetEnvVarsSnapshotBySite(projectID, siteID)
+	if err != nil {
+		return nil, err
+	}
+	return snap.Values, nil
+}
+
+// GetEnvVarsSnapshotBySite returns values and build-time markers.
+func (c *Client) GetEnvVarsSnapshotBySite(projectID, siteID string) (*EnvVarsSnapshot, error) {
 	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID+"/sites/"+siteID+"/env", nil)
 	if err != nil {
 		return nil, err
@@ -394,19 +436,31 @@ func (c *Client) GetEnvVarsBySite(projectID, siteID string) (map[string]string, 
 	defer resp.Body.Close()
 
 	var result struct {
-		EnvVars map[string]string `json:"env_vars"`
+		EnvVars       map[string]string `json:"env_vars"`
+		BuildTimeKeys []string          `json:"build_time_keys"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result.EnvVars == nil {
-		return make(map[string]string), nil
+		result.EnvVars = make(map[string]string)
 	}
-	return result.EnvVars, nil
+	return &EnvVarsSnapshot{Values: result.EnvVars, BuildTimeKeys: result.BuildTimeKeys}, nil
 }
 
-// SetEnvVarsBySite replaces all env vars for a specific site.
+// SetEnvVarsBySite replaces all env vars for a specific site (runtime-only).
 func (c *Client) SetEnvVarsBySite(projectID, siteID string, envVars map[string]string) error {
+	return c.SetEnvVarsBySiteWithBuildTime(projectID, siteID, envVars, nil, false)
+}
+
+// SetEnvVarsBySiteWithBuildTime replaces env vars and marks the listed keys
+// as build-time. force=true bypasses the server's secret-pattern rejection.
+func (c *Client) SetEnvVarsBySiteWithBuildTime(projectID, siteID string, envVars map[string]string, buildTimeKeys []string, force bool) error {
 	envJSON, _ := json.Marshal(envVars)
-	body, _ := json.Marshal(map[string]string{"env_vars": string(envJSON)})
+	payload := map[string]interface{}{
+		"env_vars":        string(envJSON),
+		"build_time_keys": buildTimeKeys,
+		"force":           force,
+	}
+	body, _ := json.Marshal(payload)
 	resp, err := c.authRequest("PUT", "/api/v1/projects/"+projectID+"/sites/"+siteID+"/env", bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -415,6 +469,12 @@ func (c *Client) SetEnvVarsBySite(projectID, siteID string, envVars map[string]s
 
 	if resp.StatusCode != 200 {
 		respBody, _ := io.ReadAll(resp.Body)
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(respBody, &errResp) == nil && errResp.Error != "" {
+			return fmt.Errorf("%s", errResp.Error)
+		}
 		return fmt.Errorf("failed: %s", string(respBody))
 	}
 	return nil
