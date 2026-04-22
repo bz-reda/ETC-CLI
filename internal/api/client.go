@@ -1160,3 +1160,104 @@ func (c *Client) DeleteAuthUser(appID, userID string) error {
 	}
 	return nil
 }
+// ==================== Project Transfer ====================
+
+type TransferInitiateResponse struct {
+	TransferID string `json:"transfer_id"`
+	ToEmail    string `json:"to_email"`
+	ExpiresAt  string `json:"expires_at"`
+	Message    string `json:"message"`
+}
+
+type TransferStatus struct {
+	Pending     bool   `json:"pending"`
+	TransferID  string `json:"transfer_id,omitempty"`
+	ToEmail     string `json:"to_email,omitempty"`
+	InitiatedAt string `json:"initiated_at,omitempty"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
+}
+
+type TransferAcceptResponse struct {
+	Message   string `json:"message"`
+	ProjectID string `json:"project_id"`
+}
+
+// InitiateProjectTransfer asks the server to create a pending transfer to
+// toEmail. The raw token is emailed to the recipient; the CLI never sees it.
+func (c *Client) InitiateProjectTransfer(projectID, toEmail string) (*TransferInitiateResponse, error) {
+	body, _ := json.Marshal(map[string]string{"to_email": toEmail})
+	resp, err := c.authRequest("POST", "/api/v1/projects/"+projectID+"/transfer", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, decodeAPIError(resp)
+	}
+	var out TransferInitiateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetProjectTransferStatus returns the pending transfer (if any) for a project.
+func (c *Client) GetProjectTransferStatus(projectID string) (*TransferStatus, error) {
+	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID+"/transfer", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, decodeAPIError(resp)
+	}
+	var out TransferStatus
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// CancelProjectTransfer cancels the current project's pending transfer.
+func (c *Client) CancelProjectTransfer(projectID string) error {
+	resp, err := c.authRequest("DELETE", "/api/v1/projects/"+projectID+"/transfer", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return decodeAPIError(resp)
+	}
+	return nil
+}
+
+// AcceptProjectTransfer consumes a raw base64url token (as received in the
+// invite email) and completes the transfer. The server hashes internally.
+func (c *Client) AcceptProjectTransfer(rawToken string) (*TransferAcceptResponse, error) {
+	resp, err := c.authRequest("POST", "/api/v1/transfers/accept/"+rawToken, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, decodeAPIError(resp)
+	}
+	var out TransferAcceptResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// decodeAPIError reads a JSON {"error": "..."} body and returns a Go error
+// with the server's message. Falls back to the raw body on parse failure.
+func decodeAPIError(resp *http.Response) error {
+	raw, _ := io.ReadAll(resp.Body)
+	var errResp struct{ Error string `json:"error"` }
+	if json.Unmarshal(raw, &errResp) == nil && errResp.Error != "" {
+		return fmt.Errorf("%s", errResp.Error)
+	}
+	return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(raw))
+}
