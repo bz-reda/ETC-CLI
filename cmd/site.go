@@ -109,7 +109,7 @@ var siteAddCmd = &cobra.Command{
 var siteUseCmd = &cobra.Command{
 	Use:   "use <slug>",
 	Short: "Switch the active site in .espacetech.json",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("slug", "site list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {

@@ -19,7 +19,7 @@ var storageCmd = &cobra.Command{
 var storageCreateCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a storage bucket",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", ""),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -100,7 +100,7 @@ var storageListCmd = &cobra.Command{
 var storageInfoCmd = &cobra.Command{
 	Use:   "info [name]",
 	Short: "Show bucket details",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "storage list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -135,7 +135,7 @@ var storageInfoCmd = &cobra.Command{
 var storageCredentialsCmd = &cobra.Command{
 	Use:   "credentials [name]",
 	Short: "Show S3 access credentials",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "storage list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -171,7 +171,7 @@ var storageLinkProject string
 var storageLinkCmd = &cobra.Command{
 	Use:   "link [bucket-name]",
 	Short: "Link a bucket to a project (injects S3 env vars)",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("bucket-name", "storage list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -230,7 +230,7 @@ var storageLinkCmd = &cobra.Command{
 var storageUnlinkCmd = &cobra.Command{
 	Use:   "unlink [bucket-name]",
 	Short: "Unlink a bucket from its project",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("bucket-name", "storage list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -258,7 +258,7 @@ var storageUnlinkCmd = &cobra.Command{
 var storageExposeCmd = &cobra.Command{
 	Use:   "expose [name]",
 	Short: "Make bucket publicly accessible as a website",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "storage list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -287,7 +287,7 @@ var storageExposeCmd = &cobra.Command{
 var storageUnexposeCmd = &cobra.Command{
 	Use:   "unexpose [name]",
 	Short: "Disable public access to a bucket",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "storage list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -315,7 +315,7 @@ var storageUnexposeCmd = &cobra.Command{
 var storageRotateCmd = &cobra.Command{
 	Use:   "rotate [name]",
 	Short: "Rotate S3 access credentials",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "storage list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -354,7 +354,7 @@ var storageRotateCmd = &cobra.Command{
 var storageDeleteCmd = &cobra.Command{
 	Use:   "delete [name]",
 	Short: "Delete a storage bucket and all its data",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "storage list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {

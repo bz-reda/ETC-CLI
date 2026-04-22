@@ -56,7 +56,7 @@ var authCmd = &cobra.Command{
 var authCreateCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a managed auth service for a project",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", ""),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -154,7 +154,7 @@ var authListCmd = &cobra.Command{
 var authInfoCmd = &cobra.Command{
 	Use:   "info [name]",
 	Short: "Show auth app details and endpoints",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -226,7 +226,7 @@ var (
 var authConfigCmd = &cobra.Command{
 	Use:   "config [name]",
 	Short: "Configure an auth app (OAuth providers, settings)",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -299,7 +299,7 @@ var authConfigCmd = &cobra.Command{
 var authUsersCmd = &cobra.Command{
 	Use:   "users [name]",
 	Short: "List users for an auth app",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -343,7 +343,7 @@ var authUsersCmd = &cobra.Command{
 var authStatsCmd = &cobra.Command{
 	Use:   "stats [name]",
 	Short: "Show auth app statistics",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -374,7 +374,7 @@ var authStatsCmd = &cobra.Command{
 var authDeleteCmd = &cobra.Command{
 	Use:   "delete [name]",
 	Short: "Delete an auth app and all its users",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -410,7 +410,7 @@ var authDeleteCmd = &cobra.Command{
 var authRotateKeysCmd = &cobra.Command{
 	Use:   "rotate-keys [name]",
 	Short: "Rotate JWT signing keys for an auth app",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("name", "auth list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {

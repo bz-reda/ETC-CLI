@@ -79,7 +79,7 @@ Build-time values are embedded in image layers and visible to anyone with
 registry pull access. The server refuses to mark likely-secret keys
 (*_SECRET, *_TOKEN, *_PASSWORD, PRIVATE_*, CREDENTIAL*) as build-time;
 pass --force to override.`,
-	Args: cobra.MinimumNArgs(1),
+	Args: requireAtLeastOneArg("KEY=VALUE", ""),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -189,7 +189,7 @@ var envListCmd = &cobra.Command{
 var envRemoveCmd = &cobra.Command{
 	Use:   "remove [KEY...]",
 	Short: "Remove environment variables",
-	Args:  cobra.MinimumNArgs(1),
+	Args:  requireAtLeastOneArg("KEY", "env list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -215,10 +215,32 @@ var envRemoveCmd = &cobra.Command{
 			btSet[k] = true
 		}
 
+		// Split requested keys into present vs missing so the one-line diff
+		// reflects what will actually change on the server. Missing keys
+		// are a no-op but worth noting in case the user made a typo.
+		var willRemove, notFound []string
 		for _, key := range args {
+			if _, present := snap.Values[key]; present {
+				willRemove = append(willRemove, key)
+			} else {
+				notFound = append(notFound, key)
+			}
+		}
+		sort.Strings(willRemove)
+		sort.Strings(notFound)
+
+		if len(willRemove) == 0 {
+			fmt.Printf("Nothing to remove — none of [%s] are currently set.\n", strings.Join(args, ", "))
+			return
+		}
+		fmt.Printf("Removing %d env var(s): %s\n", len(willRemove), strings.Join(willRemove, ", "))
+		if len(notFound) > 0 {
+			fmt.Printf("Skipped %d unknown key(s): %s\n", len(notFound), strings.Join(notFound, ", "))
+		}
+
+		for _, key := range willRemove {
 			delete(snap.Values, key)
 			delete(btSet, key)
-			fmt.Printf("   Removed: %s\n", key)
 		}
 
 		var btKeys []string
@@ -254,7 +276,7 @@ Supports standard dotenv syntax: KEY=VALUE, quoted values ("...", '...'),
 
 By default, existing vars are overwritten with a printed diff. Use
 --skip-existing to keep existing values untouched.`,
-	Args: cobra.ExactArgs(1),
+	Args: requireOneArg("file", ""),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {

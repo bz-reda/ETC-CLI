@@ -19,7 +19,7 @@ var domainCmd = &cobra.Command{
 var domainAddCmd = &cobra.Command{
 	Use:   "add [domain]",
 	Short: "Add a custom domain to the current project",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("domain", ""),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -91,10 +91,12 @@ var domainListCmd = &cobra.Command{
 	},
 }
 
+var domainRemoveYes bool
+
 var domainRemoveCmd = &cobra.Command{
 	Use:   "remove [domain]",
 	Short: "Remove a domain from the current project",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("domain", "domain list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -113,6 +115,16 @@ var domainRemoveCmd = &cobra.Command{
 		}
 		json.Unmarshal(data, &projectCfg)
 
+		if !domainRemoveYes {
+			fmt.Printf("⚠️  Remove '%s'? This breaks DNS routing for this hostname. (y/N): ", args[0])
+			var confirm string
+			fmt.Scanln(&confirm)
+			if confirm != "y" && confirm != "Y" {
+				fmt.Println("❌ Cancelled.")
+				return
+			}
+		}
+
 		client := api.NewClient(cfg)
 		err = client.RemoveDomain(projectCfg.ProjectID, args[0])
 		if err != nil {
@@ -125,6 +137,8 @@ var domainRemoveCmd = &cobra.Command{
 }
 
 func init() {
+	domainRemoveCmd.Flags().BoolVarP(&domainRemoveYes, "yes", "y", false, "skip the confirmation prompt")
+
 	domainCmd.AddCommand(domainAddCmd)
 	domainCmd.AddCommand(domainListCmd)
 	domainCmd.AddCommand(domainRemoveCmd)
