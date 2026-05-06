@@ -19,12 +19,14 @@ import (
 var deployProd bool
 
 type projectConfig struct {
-	ProjectID string `json:"project_id"`
-	Name      string `json:"name"`
-	Slug      string `json:"slug"`
-	SiteID    string `json:"site_id,omitempty"`
-	SiteName  string `json:"site_name,omitempty"`
-	SiteSlug  string `json:"site_slug,omitempty"`
+	ProjectID     string `json:"project_id"`
+	Name          string `json:"name"`
+	Slug          string `json:"slug"`
+	SiteID        string `json:"site_id,omitempty"`
+	SiteName      string `json:"site_name,omitempty"`
+	SiteSlug      string `json:"site_slug,omitempty"`
+	RootDirectory string `json:"root_directory,omitempty"` // app subdir when .espacetech.json lives at monorepo root
+	Framework     string `json:"framework,omitempty"`      // recorded from init; server still auto-detects
 }
 
 type appChoice struct {
@@ -110,7 +112,9 @@ var deployCmd = &cobra.Command{
 			// No config in CWD - check if inside a monorepo
 			monorepoRoot := findMonorepoRoot(cwd)
 			if monorepoRoot == "" {
-				fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+				fmt.Println("❌ No project config found.")
+				fmt.Println("   • New project?       run 'espacetech init'")
+				fmt.Println("   • Existing project?  run 'espacetech link'")
 				return
 			}
 
@@ -153,8 +157,12 @@ var deployCmd = &cobra.Command{
 		sourceDir := appDir
 		rootDirectory := ""
 
-		monorepoRoot := findMonorepoRoot(appDir)
-		if monorepoRoot != "" && monorepoRoot != appDir {
+		if projCfg.RootDirectory != "" {
+			// Config is at the monorepo root and explicitly points at an app subdir.
+			rootDirectory = projCfg.RootDirectory
+			fmt.Printf("🚀 Deploying %s (monorepo: %s, from config)...\n", projCfg.Name, rootDirectory)
+		} else if monorepoRoot := findMonorepoRoot(appDir); monorepoRoot != "" && monorepoRoot != appDir {
+			// Config is at the app subdir; derive rootDirectory from filesystem layout.
 			relPath, _ := filepath.Rel(monorepoRoot, appDir)
 			rootDirectory = relPath
 			sourceDir = monorepoRoot
@@ -169,7 +177,10 @@ var deployCmd = &cobra.Command{
 
 		client := api.NewClient(cfg)
 
-		resp, err := client.Deploy(projCfg.ProjectID, projCfg.SiteID, sourceDir, "CLI deploy", deployProd, rootDirectory)
+		rules := api.LoadIgnoreRules(sourceDir)
+		printIgnoreRules(rules)
+
+		resp, err := client.Deploy(projCfg.ProjectID, projCfg.SiteID, sourceDir, "CLI deploy", deployProd, rootDirectory, rules)
 		if err != nil {
 			fmt.Printf("❌ Deploy failed: %v\n", err)
 			return
@@ -220,4 +231,20 @@ var deployCmd = &cobra.Command{
 func init() {
 	deployCmd.Flags().BoolVarP(&deployProd, "prod", "p", false, "Deploy to production")
 	rootCmd.AddCommand(deployCmd)
+}
+
+func printIgnoreRules(rules *api.IgnoreRules) {
+	fmt.Printf("📋 Baseline ignore: %s\n", strings.Join(api.BaselineIgnoreDirs, ", "))
+	if rules == nil || rules.Source == "" {
+		fmt.Println("   (no .espacetechignore or .dockerignore found)")
+		return
+	}
+	if len(rules.Patterns) == 0 {
+		fmt.Printf("   %s is present but empty\n", rules.Source)
+		return
+	}
+	fmt.Printf("   Applying %s:\n", rules.Source)
+	for _, p := range rules.Patterns {
+		fmt.Printf("     • %s\n", p)
+	}
 }

@@ -7,17 +7,79 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	gitignore "github.com/sabhiram/go-gitignore"
 )
 
-var ignoreDirs = map[string]bool{
-	"node_modules": true,
-	".next":        true,
-	".git":         true,
-	".turbo":       true,
-	"dist":         true,
+// BaselineIgnoreDirs are directory names always excluded from the upload,
+// regardless of user ignore rules. OR'd with any rules from .espacetechignore
+// or .dockerignore — user rules cannot re-include these.
+var BaselineIgnoreDirs = []string{
+	"node_modules", ".next", ".git", ".turbo", "dist",
 }
 
-func createTarball(sourceDir, tarPath string) error {
+var baselineSet = func() map[string]bool {
+	m := make(map[string]bool, len(BaselineIgnoreDirs))
+	for _, d := range BaselineIgnoreDirs {
+		m[d] = true
+	}
+	return m
+}()
+
+// IgnoreRules holds user-supplied ignore patterns loaded from the source dir.
+type IgnoreRules struct {
+	Source   string   // ".espacetechignore", ".dockerignore", or "" when none found
+	Patterns []string // patterns as loaded, for display at deploy-time
+	matcher  *gitignore.GitIgnore
+}
+
+// LoadIgnoreRules reads .espacetechignore first, then .dockerignore, from
+// sourceDir. Returns empty rules (Source == "") when neither exists.
+func LoadIgnoreRules(sourceDir string) *IgnoreRules {
+	for _, name := range []string{".espacetechignore", ".dockerignore"} {
+		data, err := os.ReadFile(filepath.Join(sourceDir, name))
+		if err != nil {
+			continue
+		}
+		patterns := parseIgnoreLines(string(data))
+		rules := &IgnoreRules{Source: name, Patterns: patterns}
+		if len(patterns) > 0 {
+			rules.matcher = gitignore.CompileIgnoreLines(patterns...)
+		}
+		return rules
+	}
+	return &IgnoreRules{}
+}
+
+func parseIgnoreLines(content string) []string {
+	var out []string
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		out = append(out, trimmed)
+	}
+	return out
+}
+
+// matches returns true when the relative path is excluded by user rules.
+// For directories, the path is also tried with a trailing slash so that
+// gitignore dir-only patterns (e.g. "android/") match.
+func (r *IgnoreRules) matches(relPath string, isDir bool) bool {
+	if r == nil || r.matcher == nil {
+		return false
+	}
+	if r.matcher.MatchesPath(relPath) {
+		return true
+	}
+	if isDir && r.matcher.MatchesPath(relPath+"/") {
+		return true
+	}
+	return false
+}
+
+func createTarball(sourceDir, tarPath string, rules *IgnoreRules) error {
 	file, err := os.Create(tarPath)
 	if err != nil {
 		return err
@@ -35,18 +97,27 @@ func createTarball(sourceDir, tarPath string) error {
 			return err
 		}
 
-		// Get relative path
 		relPath, _ := filepath.Rel(sourceDir, path)
+		if relPath == "." {
+			return nil
+		}
 
-		// Skip ignored directories
-		parts := strings.Split(relPath, string(filepath.Separator))
-		for _, part := range parts {
-			if ignoreDirs[part] {
+		// Baseline: always skip these names at any depth.
+		for _, part := range strings.Split(relPath, string(filepath.Separator)) {
+			if baselineSet[part] {
 				if info.IsDir() {
 					return filepath.SkipDir
 				}
 				return nil
 			}
+		}
+
+		// User rules: OR'd on top of the baseline.
+		if rules.matches(relPath, info.IsDir()) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 
 		header, err := tar.FileInfoHeader(info, "")

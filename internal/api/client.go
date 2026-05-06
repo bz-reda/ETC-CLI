@@ -179,11 +179,9 @@ func (c *Client) CreateSite(projectID, name string) (*Site, error) {
 		return nil, fmt.Errorf("%s", errResp["error"])
 	}
 
-	var result struct {
-		Site Site `json:"site"`
-	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	return &result.Site, nil
+	var site Site
+	json.NewDecoder(resp.Body).Decode(&site)
+	return &site, nil
 }
 
 func (c *Client) ListSites(projectID string) ([]Site, error) {
@@ -193,11 +191,14 @@ func (c *Client) ListSites(projectID string) ([]Site, error) {
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Sites []Site `json:"sites"`
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("failed to list sites (status %d): %s", resp.StatusCode, string(respBody))
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	return result.Sites, nil
+
+	var sites []Site
+	json.NewDecoder(resp.Body).Decode(&sites)
+	return sites, nil
 }
 
 // Domains
@@ -230,11 +231,11 @@ type DeployResponse struct {
 	Message      string `json:"message"`
 }
 
-func (c *Client) Deploy(projectID, siteID, sourceDir, commitMessage string, isProduction bool, rootDirectory string) (*DeployResponse, error) {
+func (c *Client) Deploy(projectID, siteID, sourceDir, commitMessage string, isProduction bool, rootDirectory string, rules *IgnoreRules) (*DeployResponse, error) {
 	tarPath := filepath.Join(os.TempDir(), "paas-source.tar.gz")
 	defer os.Remove(tarPath)
 
-	if err := createTarball(sourceDir, tarPath); err != nil {
+	if err := createTarball(sourceDir, tarPath, rules); err != nil {
 		return nil, fmt.Errorf("failed to create tarball: %w", err)
 	}
 
@@ -356,7 +357,38 @@ func (c *Client) RemoveDomain(projectID, domain string) error {
 	return nil
 }
 
+// EnvVarsSnapshot captures both the key→value map and the set of keys that
+// are marked build-time (forwarded to the Docker build as --build-arg).
+type EnvVarsSnapshot struct {
+	Values        map[string]string
+	BuildTimeKeys []string
+}
+
+// IsBuildTime reports whether `key` is marked as a build-time var.
+func (s *EnvVarsSnapshot) IsBuildTime(key string) bool {
+	for _, k := range s.BuildTimeKeys {
+		if k == key {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *Client) GetEnvVars(projectID string) (map[string]string, error) {
+	snap, err := c.GetEnvVarsSnapshot(projectID)
+	if err != nil {
+		return nil, err
+	}
+	return snap.Values, nil
+}
+
+func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
+	return c.SetEnvVarsWithBuildTime(projectID, envVars, nil, false)
+}
+
+// GetEnvVarsSnapshot fetches values + build-time markers for the project's
+// site. Returns an error if the project has more than one site.
+func (c *Client) GetEnvVarsSnapshot(projectID string) (*EnvVarsSnapshot, error) {
 	sites, err := c.ListSites(projectID)
 	if err != nil {
 		return nil, err
@@ -367,10 +399,11 @@ func (c *Client) GetEnvVars(projectID string) (map[string]string, error) {
 	if len(sites) > 1 {
 		return nil, fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
 	}
-	return c.GetEnvVarsBySite(projectID, sites[0].ID)
+	return c.GetEnvVarsSnapshotBySite(projectID, sites[0].ID)
 }
 
-func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
+// SetEnvVarsWithBuildTime is the richer form that carries build-time markers.
+func (c *Client) SetEnvVarsWithBuildTime(projectID string, envVars map[string]string, buildTimeKeys []string, force bool) error {
 	sites, err := c.ListSites(projectID)
 	if err != nil {
 		return err
@@ -381,11 +414,21 @@ func (c *Client) SetEnvVars(projectID string, envVars map[string]string) error {
 	if len(sites) > 1 {
 		return fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
 	}
-	return c.SetEnvVarsBySite(projectID, sites[0].ID, envVars)
+	return c.SetEnvVarsBySiteWithBuildTime(projectID, sites[0].ID, envVars, buildTimeKeys, force)
 }
 
-// GetEnvVarsBySite fetches env vars for a specific site.
+// GetEnvVarsBySite fetches env vars for a specific site (values only —
+// kept for callers that don't care about the build-time distinction).
 func (c *Client) GetEnvVarsBySite(projectID, siteID string) (map[string]string, error) {
+	snap, err := c.GetEnvVarsSnapshotBySite(projectID, siteID)
+	if err != nil {
+		return nil, err
+	}
+	return snap.Values, nil
+}
+
+// GetEnvVarsSnapshotBySite returns values and build-time markers.
+func (c *Client) GetEnvVarsSnapshotBySite(projectID, siteID string) (*EnvVarsSnapshot, error) {
 	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID+"/sites/"+siteID+"/env", nil)
 	if err != nil {
 		return nil, err
@@ -393,19 +436,31 @@ func (c *Client) GetEnvVarsBySite(projectID, siteID string) (map[string]string, 
 	defer resp.Body.Close()
 
 	var result struct {
-		EnvVars map[string]string `json:"env_vars"`
+		EnvVars       map[string]string `json:"env_vars"`
+		BuildTimeKeys []string          `json:"build_time_keys"`
 	}
 	json.NewDecoder(resp.Body).Decode(&result)
 	if result.EnvVars == nil {
-		return make(map[string]string), nil
+		result.EnvVars = make(map[string]string)
 	}
-	return result.EnvVars, nil
+	return &EnvVarsSnapshot{Values: result.EnvVars, BuildTimeKeys: result.BuildTimeKeys}, nil
 }
 
-// SetEnvVarsBySite replaces all env vars for a specific site.
+// SetEnvVarsBySite replaces all env vars for a specific site (runtime-only).
 func (c *Client) SetEnvVarsBySite(projectID, siteID string, envVars map[string]string) error {
+	return c.SetEnvVarsBySiteWithBuildTime(projectID, siteID, envVars, nil, false)
+}
+
+// SetEnvVarsBySiteWithBuildTime replaces env vars and marks the listed keys
+// as build-time. force=true bypasses the server's secret-pattern rejection.
+func (c *Client) SetEnvVarsBySiteWithBuildTime(projectID, siteID string, envVars map[string]string, buildTimeKeys []string, force bool) error {
 	envJSON, _ := json.Marshal(envVars)
-	body, _ := json.Marshal(map[string]string{"env_vars": string(envJSON)})
+	payload := map[string]interface{}{
+		"env_vars":        string(envJSON),
+		"build_time_keys": buildTimeKeys,
+		"force":           force,
+	}
+	body, _ := json.Marshal(payload)
 	resp, err := c.authRequest("PUT", "/api/v1/projects/"+projectID+"/sites/"+siteID+"/env", bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -414,6 +469,12 @@ func (c *Client) SetEnvVarsBySite(projectID, siteID string, envVars map[string]s
 
 	if resp.StatusCode != 200 {
 		respBody, _ := io.ReadAll(resp.Body)
+		var errResp struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(respBody, &errResp) == nil && errResp.Error != "" {
+			return fmt.Errorf("%s", errResp.Error)
+		}
 		return fmt.Errorf("failed: %s", string(respBody))
 	}
 	return nil
@@ -506,11 +567,19 @@ type DatabaseInfo struct {
 	CPULimit    string `json:"cpu_limit"`
 	MemoryLimit string `json:"memory_limit"`
 	ProjectID   string `json:"project_id,omitempty"`
+	ReplicaSet  bool   `json:"replica_set,omitempty"`
 	CreatedAt   string `json:"created_at"`
 }
 
-func (c *Client) CreateDatabase(name, dbType, projectID string) (*DatabaseInfo, error) {
-	body, _ := json.Marshal(map[string]string{"name": name, "type": dbType, "project_id": projectID})
+// CreateDatabase creates a managed database. replicaSet is only meaningful for
+// MongoDB and is sent only when non-nil so the server's default (true for new
+// MongoDB instances) applies when the caller doesn't override it.
+func (c *Client) CreateDatabase(name, dbType, projectID string, replicaSet *bool) (*DatabaseInfo, error) {
+	payload := map[string]interface{}{"name": name, "type": dbType, "project_id": projectID}
+	if replicaSet != nil {
+		payload["replica_set"] = *replicaSet
+	}
+	body, _ := json.Marshal(payload)
 	resp, err := c.authRequest("POST", "/api/v1/databases", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -1090,4 +1159,105 @@ func (c *Client) DeleteAuthUser(appID, userID string) error {
 		return fmt.Errorf("%s", errResp["error"])
 	}
 	return nil
+}
+// ==================== Project Transfer ====================
+
+type TransferInitiateResponse struct {
+	TransferID string `json:"transfer_id"`
+	ToEmail    string `json:"to_email"`
+	ExpiresAt  string `json:"expires_at"`
+	Message    string `json:"message"`
+}
+
+type TransferStatus struct {
+	Pending     bool   `json:"pending"`
+	TransferID  string `json:"transfer_id,omitempty"`
+	ToEmail     string `json:"to_email,omitempty"`
+	InitiatedAt string `json:"initiated_at,omitempty"`
+	ExpiresAt   string `json:"expires_at,omitempty"`
+}
+
+type TransferAcceptResponse struct {
+	Message   string `json:"message"`
+	ProjectID string `json:"project_id"`
+}
+
+// InitiateProjectTransfer asks the server to create a pending transfer to
+// toEmail. The raw token is emailed to the recipient; the CLI never sees it.
+func (c *Client) InitiateProjectTransfer(projectID, toEmail string) (*TransferInitiateResponse, error) {
+	body, _ := json.Marshal(map[string]string{"to_email": toEmail})
+	resp, err := c.authRequest("POST", "/api/v1/projects/"+projectID+"/transfer", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, decodeAPIError(resp)
+	}
+	var out TransferInitiateResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetProjectTransferStatus returns the pending transfer (if any) for a project.
+func (c *Client) GetProjectTransferStatus(projectID string) (*TransferStatus, error) {
+	resp, err := c.authRequest("GET", "/api/v1/projects/"+projectID+"/transfer", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 300 {
+		return nil, decodeAPIError(resp)
+	}
+	var out TransferStatus
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// CancelProjectTransfer cancels the current project's pending transfer.
+func (c *Client) CancelProjectTransfer(projectID string) error {
+	resp, err := c.authRequest("DELETE", "/api/v1/projects/"+projectID+"/transfer", nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return decodeAPIError(resp)
+	}
+	return nil
+}
+
+// AcceptProjectTransfer consumes a raw base64url token (as received in the
+// invite email) and completes the transfer. The server hashes internally.
+func (c *Client) AcceptProjectTransfer(rawToken string) (*TransferAcceptResponse, error) {
+	resp, err := c.authRequest("POST", "/api/v1/transfers/accept/"+rawToken, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return nil, decodeAPIError(resp)
+	}
+	var out TransferAcceptResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// decodeAPIError reads a JSON {"error": "..."} body and returns a Go error
+// with the server's message. Falls back to the raw body on parse failure.
+func decodeAPIError(resp *http.Response) error {
+	raw, _ := io.ReadAll(resp.Body)
+	var errResp struct{ Error string `json:"error"` }
+	if json.Unmarshal(raw, &errResp) == nil && errResp.Error != "" {
+		return fmt.Errorf("%s", errResp.Error)
+	}
+	return fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(raw))
 }

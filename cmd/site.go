@@ -63,53 +63,68 @@ var siteListCmd = &cobra.Command{
 	},
 }
 
-var siteAddCmd = &cobra.Command{
-	Use:   "add [name]",
-	Short: "Add a new site to the current project",
+func runSiteCreate(cmd *cobra.Command, args []string) {
+	cfg := config.Load()
+	if cfg.Token == "" {
+		fmt.Println("❌ Please login first: espacetech login")
+		return
+	}
+
+	projectID, _, _, err := localConfig()
+	if err != nil {
+		fmt.Printf("❌ %v\n", err)
+		return
+	}
+
+	var siteName string
+	if len(args) > 0 {
+		siteName = args[0]
+	} else {
+		prompt := promptui.Prompt{Label: "Site name (e.g. admin, api, frontend)"}
+		siteName, _ = prompt.Run()
+	}
+	if siteName == "" {
+		fmt.Println("❌ Site name is required")
+		return
+	}
+
+	client := api.NewClient(cfg)
+	site, err := client.CreateSite(projectID, siteName)
+	if err != nil {
+		fmt.Printf("❌ Failed to create site: %v\n", err)
+		return
+	}
+
+	fmt.Printf("✅ Site '%s' created (slug: %s, id: %s)\n", site.Name, site.Slug, site.ID)
+	fmt.Printf("\nTo deploy to this site, switch to it first:\n")
+	fmt.Printf("  espacetech site use %s\n", site.Slug)
+	fmt.Printf("  espacetech deploy --prod\n")
+}
+
+var siteCreateCmd = &cobra.Command{
+	Use:   "create [name]",
+	Short: "Create a new site in the current project",
 	Args:  cobra.MaximumNArgs(1),
+	Run:   runSiteCreate,
+}
+
+// siteAddCmd is the deprecated alias; hidden from help output, prints a
+// deprecation warning the first time per week it's invoked.
+var siteAddCmd = &cobra.Command{
+	Use:    "add [name]",
+	Short:  "(deprecated) alias for 'site create'",
+	Hidden: true,
+	Args:   cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		cfg := config.Load()
-		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
-			return
-		}
-
-		projectID, _, _, err := localConfig()
-		if err != nil {
-			fmt.Printf("❌ %v\n", err)
-			return
-		}
-
-		var siteName string
-		if len(args) > 0 {
-			siteName = args[0]
-		} else {
-			prompt := promptui.Prompt{Label: "Site name (e.g. admin, api, frontend)"}
-			siteName, _ = prompt.Run()
-		}
-		if siteName == "" {
-			fmt.Println("❌ Site name is required")
-			return
-		}
-
-		client := api.NewClient(cfg)
-		site, err := client.CreateSite(projectID, siteName)
-		if err != nil {
-			fmt.Printf("❌ Failed to create site: %v\n", err)
-			return
-		}
-
-		fmt.Printf("✅ Site '%s' created (slug: %s, id: %s)\n", site.Name, site.Slug, site.ID)
-		fmt.Printf("\nTo deploy to this site, switch to it first:\n")
-		fmt.Printf("  espacetech site use %s\n", site.Slug)
-		fmt.Printf("  espacetech deploy --prod\n")
+		maybeWarnDeprecated("site add", "site create", "v0.3.0")
+		runSiteCreate(cmd, args)
 	},
 }
 
 var siteUseCmd = &cobra.Command{
 	Use:   "use <slug>",
 	Short: "Switch the active site in .espacetech.json",
-	Args:  cobra.ExactArgs(1),
+	Args:  requireOneArg("slug", "site list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
@@ -163,7 +178,8 @@ var siteUseCmd = &cobra.Command{
 
 func init() {
 	siteCmd.AddCommand(siteListCmd)
-	siteCmd.AddCommand(siteAddCmd)
+	siteCmd.AddCommand(siteCreateCmd)
+	siteCmd.AddCommand(siteAddCmd) // hidden deprecated alias
 	siteCmd.AddCommand(siteUseCmd)
 	rootCmd.AddCommand(siteCmd)
 }
