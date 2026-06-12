@@ -64,7 +64,20 @@ var initCmd = &cobra.Command{
 		_, framework, _ := frameworkSelect.Run()
 
 		client := api.NewClient(cfg)
-		project, err := client.CreateProject(name, framework)
+
+		// Resolve the billing account for the new project. The API
+		// requires billing_account_id for billable plans (init creates
+		// with the default "hobby" plan, which is billable). Auto-select
+		// when there's exactly one eligible account, prompt when there
+		// are several, honor --billing-account for non-interactive use.
+		billingAccountFlag, _ := cmd.Flags().GetString("billing-account")
+		billingAccountID, err := resolveBillingAccount(client, billingAccountFlag)
+		if err != nil {
+			fmt.Printf("❌ %v\n", err)
+			return
+		}
+
+		project, err := client.CreateProject(name, framework, billingAccountID)
 		if err != nil {
 			fmt.Printf("❌ Failed to create project: %v\n", err)
 			return
@@ -189,6 +202,59 @@ func detectMonorepoAppSubdir() string {
 	return result
 }
 
+// resolveBillingAccount decides which billing account backs the new
+// project. With --billing-account it uses that id as-is (non-interactive
+// / CI path — no list call, no prompt). Otherwise it lists the caller's
+// accounts, filters to eligible ones (active + owner/admin), auto-selects
+// a single one, or prompts to choose among several. Returns an actionable
+// error when the user has no eligible account.
+func resolveBillingAccount(client *api.Client, flagValue string) (string, error) {
+	if flagValue != "" {
+		return flagValue, nil
+	}
+
+	accounts, err := client.ListBillingAccounts()
+	if err != nil {
+		return "", fmt.Errorf("could not list billing accounts: %w", err)
+	}
+	eligible := api.EligibleBillingAccounts(accounts)
+
+	switch len(eligible) {
+	case 0:
+		return "", fmt.Errorf("no eligible billing account found.\n" +
+			"   A billing account is required to create a project.\n" +
+			"   Create one at cloud.espace-tech.com/settings/billing, then re-run 'espacetech init'\n" +
+			"   (or pass --billing-account <id> if you already have one).")
+	case 1:
+		a := eligible[0]
+		fmt.Printf("💳 Using billing account: %s%s\n", a.Name, personalSuffix(a))
+		return a.ID, nil
+	default:
+		labels := make([]string, len(eligible))
+		for i, a := range eligible {
+			labels[i] = fmt.Sprintf("%s%s  (role: %s)", a.Name, personalSuffix(a), a.Role)
+		}
+		sel := promptui.Select{
+			Label: "Select a billing account for this project",
+			Items: labels,
+			Size:  10,
+		}
+		idx, _, err := sel.Run()
+		if err != nil {
+			return "", fmt.Errorf("cancelled")
+		}
+		return eligible[idx].ID, nil
+	}
+}
+
+func personalSuffix(a api.BillingAccount) string {
+	if a.IsPersonal {
+		return " (personal)"
+	}
+	return ""
+}
+
 func init() {
+	initCmd.Flags().String("billing-account", "", "Billing account ID for the new project (skips the interactive picker; for non-interactive/CI use)")
 	rootCmd.AddCommand(initCmd)
 }
