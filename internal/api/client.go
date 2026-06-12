@@ -123,8 +123,16 @@ type Project struct {
 	Framework string `json:"framework"`
 }
 
-func (c *Client) CreateProject(name, framework string) (*Project, error) {
-	body, _ := json.Marshal(map[string]string{"name": name, "framework": framework})
+func (c *Client) CreateProject(name, framework, billingAccountID string) (*Project, error) {
+	payload := map[string]string{"name": name, "framework": framework}
+	// The API requires billing_account_id for billable plans (every
+	// seeded plan is billable post-Phase 6; init uses the default
+	// "hobby" plan). Omit the field entirely when unset so the server's
+	// own default/validation applies.
+	if billingAccountID != "" {
+		payload["billing_account_id"] = billingAccountID
+	}
+	body, _ := json.Marshal(payload)
 	resp, err := c.authRequest("POST", "/api/v1/projects", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -132,13 +140,60 @@ func (c *Client) CreateProject(name, framework string) (*Project, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 201 {
-		respBody, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("failed to create project: %s", string(respBody))
+		// decodeAPIError surfaces the server's {"error":...} message
+		// instead of dumping the raw JSON body at the user.
+		return nil, decodeAPIError(resp)
 	}
 
 	var project Project
 	json.NewDecoder(resp.Body).Decode(&project)
 	return &project, nil
+}
+
+// Billing accounts
+
+type BillingAccount struct {
+	ID         string `json:"id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Role       string `json:"role"`
+	IsPersonal bool   `json:"is_personal"`
+}
+
+// ListBillingAccounts returns the caller's billing accounts
+// (GET /api/v1/billing-accounts → {"accounts":[...]}). The server filters
+// to accounts the caller owns or is a member of.
+func (c *Client) ListBillingAccounts() ([]BillingAccount, error) {
+	resp, err := c.authRequest("GET", "/api/v1/billing-accounts", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, decodeAPIError(resp)
+	}
+
+	var out struct {
+		Accounts []BillingAccount `json:"accounts"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, err
+	}
+	return out.Accounts, nil
+}
+
+// EligibleBillingAccounts filters to accounts that can back a new project:
+// active, and the caller is owner or admin. Mirrors the dashboard's
+// project-create gate. Pure function — unit-tested.
+func EligibleBillingAccounts(accounts []BillingAccount) []BillingAccount {
+	var out []BillingAccount
+	for _, a := range accounts {
+		if a.Status == "active" && (a.Role == "owner" || a.Role == "admin") {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 func (c *Client) ListProjects() ([]Project, error) {
