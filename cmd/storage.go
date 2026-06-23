@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"paas-cli/internal/api"
 	"paas-cli/internal/config"
@@ -23,13 +22,13 @@ var storageCreateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
-		// Read project_id from .espacetech.json
+		// Read project_id from the project config
 		projectID := ""
-		data, err := os.ReadFile(".espacetech.json")
+		data, err := readProjectConfig(".")
 		if err == nil {
 			var projectCfg struct {
 				ProjectID string `json:"project_id"`
@@ -38,7 +37,7 @@ var storageCreateCmd = &cobra.Command{
 			projectID = projectCfg.ProjectID
 		}
 		if projectID == "" {
-			fmt.Println("❌ No .espacetech.json found. Run 'espacetech init' first or run this command from a project directory.")
+			fmt.Println("❌ No project config found. Run 'ghayma init' first or run this command from a project directory.")
 			return
 		}
 
@@ -63,7 +62,7 @@ var storageListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -75,7 +74,7 @@ var storageListCmd = &cobra.Command{
 		}
 
 		if len(buckets) == 0 {
-			fmt.Println("No storage buckets found. Create one with: espacetech storage create <name>")
+			fmt.Println("No storage buckets found. Create one with: ghayma storage create <name>")
 			return
 		}
 
@@ -104,7 +103,7 @@ var storageInfoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -125,9 +124,9 @@ var storageInfoCmd = &cobra.Command{
 		} else {
 			fmt.Printf("   Linked to:  (none)\n")
 		}
-		fmt.Printf("   Endpoint:   https://s3.espace-tech.com\n")
+		fmt.Printf("   Endpoint:   https://s3.ghayma.tech\n")
 		if bucket.ExternalAccess {
-			fmt.Printf("   Public URL: https://%s.web.espace-tech.com\n", bucket.GarageBucket)
+			fmt.Printf("   Public URL: https://%s.web.ghayma.tech\n", bucket.GarageBucket)
 		}
 	},
 }
@@ -139,7 +138,7 @@ var storageCredentialsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -175,7 +174,7 @@ var storageLinkCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -204,9 +203,9 @@ var storageLinkCmd = &cobra.Command{
 				return
 			}
 		} else {
-			data, err := os.ReadFile(".espacetech.json")
+			data, err := readProjectConfig(".")
 			if err != nil {
-				fmt.Println("❌ No --project flag and no .espacetech.json found")
+				fmt.Println("❌ No --project flag and no project config found")
 				return
 			}
 			var projectCfg struct {
@@ -234,7 +233,7 @@ var storageUnlinkCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -262,7 +261,7 @@ var storageExposeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -291,7 +290,7 @@ var storageUnexposeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -319,7 +318,7 @@ var storageRotateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -358,7 +357,7 @@ var storageDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 

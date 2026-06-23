@@ -15,7 +15,7 @@ import (
 var linkCmd = &cobra.Command{
 	Use:   "link [project-slug]",
 	Short: "Link the current directory to an existing project",
-	Long: `Link the current directory to a project that already exists on Espace-Tech Cloud.
+	Long: `Link the current directory to a project that already exists on Ghayma.
 
 Use this instead of 'init' when you clone a repository on a new machine:
 init creates a brand-new project, while link connects to one you already own.`,
@@ -23,12 +23,12 @@ init creates a brand-new project, while link connects to one you already own.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
-		if _, err := os.Stat(".espacetech.json"); err == nil {
-			fmt.Println("⚠️  This directory is already linked. Delete .espacetech.json to re-link.")
+		if _, err := findProjectConfig("."); err == nil {
+			fmt.Println("⚠️  This directory is already linked. Delete the project config to re-link.")
 			return
 		}
 
@@ -40,7 +40,7 @@ init creates a brand-new project, while link connects to one you already own.`,
 			return
 		}
 		if len(projects) == 0 {
-			fmt.Println("❌ You don't have any projects yet. Create one with: espacetech init")
+			fmt.Println("❌ You don't have any projects yet. Create one with: ghayma init")
 			return
 		}
 
@@ -56,7 +56,7 @@ init creates a brand-new project, while link connects to one you already own.`,
 			}
 			if project == nil {
 				fmt.Printf("❌ No project found matching '%s'\n", target)
-				fmt.Println("   Run 'espacetech link' without arguments to pick from a list.")
+				fmt.Println("   Run 'ghayma link' without arguments to pick from a list.")
 				return
 			}
 		} else {
@@ -83,7 +83,7 @@ init creates a brand-new project, while link connects to one you already own.`,
 			return
 		}
 		if len(sites) == 0 {
-			fmt.Println("❌ This project has no sites. Create one with: espacetech site add <name>")
+			fmt.Println("❌ This project has no sites. Create one with: ghayma site add <name>")
 			return
 		}
 
@@ -118,15 +118,16 @@ init creates a brand-new project, while link connects to one you already own.`,
 			SiteSlug:  site.Slug,
 		}
 		data, _ := json.MarshalIndent(projectCfg, "", "  ")
-		if err := os.WriteFile(".espacetech.json", data, 0644); err != nil {
-			fmt.Printf("❌ Failed to write .espacetech.json: %v\n", err)
+		configPath := projectConfigWritePath(".")
+		if err := os.WriteFile(configPath, data, 0644); err != nil {
+			fmt.Printf("❌ Failed to write %s: %v\n", configPath, err)
 			return
 		}
 
 		fmt.Printf("✅ Linked to project '%s' (slug: %s)\n", project.Name, project.Slug)
 		fmt.Printf("   Site: %s (slug: %s)\n", site.Name, site.Slug)
-		fmt.Println("📁 Config saved to .espacetech.json")
-		fmt.Println("\nNext: run 'espacetech deploy --prod' to deploy")
+		fmt.Printf("📁 Config saved to %s\n", configPath)
+		fmt.Println("\nNext: run 'ghayma deploy --prod' to deploy")
 	},
 }
 

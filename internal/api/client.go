@@ -459,7 +459,7 @@ func (c *Client) GetEnvVarsSnapshot(projectID string) (*EnvVarsSnapshot, error) 
 		return nil, fmt.Errorf("project has no sites")
 	}
 	if len(sites) > 1 {
-		return nil, fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
+		return nil, fmt.Errorf("project has multiple sites; add 'site_id' to .ghayma.json and re-run")
 	}
 	return c.GetEnvVarsSnapshotBySite(projectID, sites[0].ID)
 }
@@ -474,7 +474,7 @@ func (c *Client) SetEnvVarsWithBuildTime(projectID string, envVars map[string]st
 		return fmt.Errorf("project has no sites")
 	}
 	if len(sites) > 1 {
-		return fmt.Errorf("project has multiple sites; add 'site_id' to .espacetech.json and re-run")
+		return fmt.Errorf("project has multiple sites; add 'site_id' to .ghayma.json and re-run")
 	}
 	return c.SetEnvVarsBySiteWithBuildTime(projectID, sites[0].ID, envVars, buildTimeKeys, force)
 }

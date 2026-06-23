@@ -26,7 +26,7 @@ var projectCmd = &cobra.Command{
 var projectTransferCmd = &cobra.Command{
 	Use:   "transfer <email>",
 	Short: "Transfer ownership of the current project to another user",
-	Long: `Transfer ownership of the current project to another espacetech user.
+	Long: `Transfer ownership of the current project to another ghayma user.
 
 The recipient will receive an email with an accept link (valid for 24h).
 Once accepted, the project and all its resources (sites, deployments, env
@@ -34,7 +34,7 @@ vars, domains, databases, storage, auth apps) move to the recipient's
 account. Audit history stays attributed to the original owner.
 
 The transfer can be cancelled before it's accepted via:
-  espacetech project transfer cancel`,
+  ghayma project transfer cancel`,
 	Args: requireOneArg("email", ""),
 	Run:  runTransferInitiate,
 }
@@ -42,7 +42,7 @@ The transfer can be cancelled before it's accepted via:
 func runTransferInitiate(cmd *cobra.Command, args []string) {
 	cfg := config.Load()
 	if cfg.Token == "" {
-		fmt.Println("❌ Please login first: espacetech login")
+		fmt.Println("❌ Please login first: ghayma login")
 		return
 	}
 
@@ -80,7 +80,7 @@ func runTransferInitiate(cmd *cobra.Command, args []string) {
 	fmt.Printf("   Expires:    %s\n", resp.ExpiresAt)
 	fmt.Printf("   Transfer ID: %s\n", resp.TransferID)
 	fmt.Println("\nThe recipient has been emailed an accept link. They must accept within 24h.")
-	fmt.Println("Cancel before acceptance with: espacetech project transfer cancel")
+	fmt.Println("Cancel before acceptance with: ghayma project transfer cancel")
 }
 
 var projectTransferStatusCmd = &cobra.Command{
@@ -89,7 +89,7 @@ var projectTransferStatusCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -114,7 +114,7 @@ var projectTransferStatusCmd = &cobra.Command{
 		fmt.Printf("   Initiated at: %s\n", st.InitiatedAt)
 		fmt.Printf("   Expires at:   %s\n", st.ExpiresAt)
 		fmt.Printf("   Transfer ID:  %s\n", st.TransferID)
-		fmt.Println("\nCancel with: espacetech project transfer cancel")
+		fmt.Println("\nCancel with: ghayma project transfer cancel")
 	},
 }
 
@@ -124,7 +124,7 @@ var projectTransferCancelCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -156,7 +156,7 @@ to.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -172,28 +172,28 @@ to.`,
 		}
 		fmt.Println("✅ Transfer accepted. You are now the owner.")
 		fmt.Printf("   Project ID: %s\n", resp.ProjectID)
-		fmt.Println("\nRun 'espacetech link' from your repo to wire a local directory to this project,")
-		fmt.Println("or 'espacetech status' to see it in your project list.")
+		fmt.Println("\nRun 'ghayma link' from your repo to wire a local directory to this project,")
+		fmt.Println("or 'ghayma status' to see it in your project list.")
 	},
 }
 
-// readProjectIDAndName reads .espacetech.json from CWD and returns the
+// readProjectIDAndName reads the project config from CWD and returns the
 // project's UUID and display name. Kept separate from deploy's projectConfig
 // so it can be used from any directory regardless of site-level linking.
 func readProjectIDAndName() (string, string, error) {
-	data, err := os.ReadFile(".espacetech.json")
+	data, err := readProjectConfig(".")
 	if err != nil {
-		return "", "", fmt.Errorf("no project config found — run 'espacetech init' or 'espacetech link' first")
+		return "", "", fmt.Errorf("no project config found — run 'ghayma init' or 'ghayma link' first")
 	}
 	var cfg struct {
 		ProjectID string `json:"project_id"`
 		Name      string `json:"name"`
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return "", "", fmt.Errorf("invalid .espacetech.json: %w", err)
+		return "", "", fmt.Errorf("invalid project config: %w", err)
 	}
 	if cfg.ProjectID == "" {
-		return "", "", fmt.Errorf("project_id missing from .espacetech.json")
+		return "", "", fmt.Errorf("project_id missing from project config")
 	}
 	return cfg.ProjectID, cfg.Name, nil
 }

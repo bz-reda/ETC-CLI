@@ -19,11 +19,11 @@ var envCmd = &cobra.Command{
 	Short: "Manage environment variables",
 }
 
-// localConfig reads .espacetech.json and returns projectID + siteID.
+// localConfig reads the project config and returns projectID + siteID.
 func localConfig() (projectID, siteID, name string, err error) {
-	data, readErr := os.ReadFile(".espacetech.json")
+	data, readErr := readProjectConfig(".")
 	if readErr != nil {
-		return "", "", "", fmt.Errorf("no project config found — run 'espacetech init' first")
+		return "", "", "", fmt.Errorf("no project config found — run 'ghayma init' first")
 	}
 	var cfg struct {
 		ProjectID string `json:"project_id"`
@@ -83,7 +83,7 @@ pass --force to override.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -143,7 +143,7 @@ pass --force to override.`,
 			fmt.Println("\n⚠️  Build-time variables are embedded in image layers and visible")
 			fmt.Println("   to anyone with registry pull access. Do not use for secrets.")
 		}
-		fmt.Println("\n🔄 Redeploy to apply: espacetech deploy --prod")
+		fmt.Println("\n🔄 Redeploy to apply: ghayma deploy --prod")
 	},
 }
 
@@ -153,7 +153,7 @@ var envListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -189,7 +189,7 @@ var envListCmd = &cobra.Command{
 func runEnvDelete(cmd *cobra.Command, args []string) {
 	cfg := config.Load()
 	if cfg.Token == "" {
-		fmt.Println("❌ Please login first: espacetech login")
+		fmt.Println("❌ Please login first: ghayma login")
 		return
 	}
 
@@ -251,7 +251,7 @@ func runEnvDelete(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Println("✅ Environment variables updated")
-	fmt.Println("🔄 Redeploy to apply: espacetech deploy --prod")
+	fmt.Println("🔄 Redeploy to apply: ghayma deploy --prod")
 }
 
 var envDeleteCmd = &cobra.Command{
@@ -294,7 +294,7 @@ By default, existing vars are overwritten with a printed diff. Use
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -390,7 +390,7 @@ By default, existing vars are overwritten with a printed diff. Use
 			return
 		}
 
-		fmt.Println("\n✅ Import applied. Redeploy with: espacetech deploy --prod")
+		fmt.Println("\n✅ Import applied. Redeploy with: ghayma deploy --prod")
 	},
 }
 

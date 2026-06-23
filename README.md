@@ -1,22 +1,24 @@
-# Espace-Tech Cloud CLI
+# Ghayma CLI
 
-Command-line tool for deploying and managing applications on [Espace-Tech Cloud](https://cloud.espace-tech.com).
+Command-line tool for deploying and managing applications on [Ghayma](https://dashboard.ghayma.dev).
 
 ## Installation
 
 ```bash
-curl -fsSL https://api.espace-tech.com/install.sh | sh
+curl -fsSL https://ghayma.dev/install.sh | sh
 ```
 
-Or download manually from [Releases](https://github.com/bz-reda/ETC-CLI/releases).
+Or download manually from [Releases](https://github.com/bz-reda/ghayma-cli/releases).
+
+> **Note:** The GitHub repository rename to `bz-reda/ghayma-cli` is pending on the operator side; the clone and release URLs above reflect the intended new name.
 
 ## Quick Start
 
 ```bash
-espacetech register          # Create an account
-espacetech login              # Authenticate
-espacetech init               # Initialize a project
-espacetech deploy --prod      # Deploy to production
+ghayma register          # Create an account
+ghayma login              # Authenticate
+ghayma init               # Initialize a project
+ghayma deploy --prod      # Deploy to production
 ```
 
 ## Commands
@@ -25,100 +27,100 @@ espacetech deploy --prod      # Deploy to production
 
 | Command | Description |
 |---|---|
-| `espacetech register` | Create a new Espace-Tech account |
-| `espacetech login` | Authenticate with Espace-Tech Cloud (opens browser) |
-| `espacetech login --email` | Authenticate with email/password |
-| `espacetech logout` | Log out and clear saved credentials |
-| `espacetech version` | Show CLI version |
+| `ghayma register` | Create a new Ghayma account |
+| `ghayma login` | Authenticate with Ghayma (opens browser) |
+| `ghayma login --email` | Authenticate with email/password |
+| `ghayma logout` | Log out and clear saved credentials |
+| `ghayma version` | Show CLI version |
 
 ### Projects
 
 | Command | Description |
 |---|---|
-| `espacetech init` | Initialize a new project in the current directory |
-| `espacetech deploy` | Deploy the current project (preview) |
-| `espacetech deploy --prod` | Deploy to production |
-| `espacetech status` | List your projects |
-| `espacetech logs` | View application logs |
-| `espacetech logs -n 500` | View last 500 lines |
-| `espacetech rollback` | Rollback to a previous deployment |
-| `espacetech delete` | Delete the current project and all its resources |
+| `ghayma init` | Initialize a new project in the current directory |
+| `ghayma deploy` | Deploy the current project (preview) |
+| `ghayma deploy --prod` | Deploy to production |
+| `ghayma status` | List your projects |
+| `ghayma logs` | View application logs |
+| `ghayma logs -n 500` | View last 500 lines |
+| `ghayma rollback` | Rollback to a previous deployment |
+| `ghayma delete` | Delete the current project and all its resources |
 
 ### Sites
 
 | Command | Description |
 |---|---|
-| `espacetech site list` | List all sites in the current project |
-| `espacetech site add [name]` | Add a new site to the current project |
-| `espacetech site use <slug>` | Switch the active site in `.espacetech.json` |
+| `ghayma site list` | List all sites in the current project |
+| `ghayma site add [name]` | Add a new site to the current project |
+| `ghayma site use <slug>` | Switch the active site for the project |
 
 ### Domains
 
 | Command | Description |
 |---|---|
-| `espacetech domain add [domain]` | Add a custom domain to the current project |
-| `espacetech domain list` | List domains for the current project |
-| `espacetech domain remove [domain]` | Remove a domain from the current project |
+| `ghayma domain add [domain]` | Add a custom domain to the current project |
+| `ghayma domain list` | List domains for the current project |
+| `ghayma domain remove [domain]` | Remove a domain from the current project |
 
 ### Environment Variables
 
 | Command | Description |
 |---|---|
-| `espacetech env set KEY=VALUE` | Set environment variables |
-| `espacetech env set --file .env.production` | Set from file |
-| `espacetech env list` | List environment variables |
-| `espacetech env remove KEY` | Remove an environment variable |
+| `ghayma env set KEY=VALUE` | Set environment variables |
+| `ghayma env set --file .env.production` | Set from file |
+| `ghayma env list` | List environment variables |
+| `ghayma env remove KEY` | Remove an environment variable |
 
 ### Databases
 
 | Command | Description |
 |---|---|
-| `espacetech db create [name]` | Create a managed database |
-| `espacetech db create [name] --type redis` | Create with specific type (postgres, redis, mongodb) |
-| `espacetech db list` | List your databases |
-| `espacetech db info [name]` | Show database details |
-| `espacetech db credentials [name]` | Show connection credentials |
-| `espacetech db link [name] --project [slug]` | Link database to a project (injects env vars) |
-| `espacetech db unlink [name]` | Unlink database from its project |
-| `espacetech db expose [name]` | Enable external access |
-| `espacetech db unexpose [name]` | Disable external access |
-| `espacetech db stop [name]` | Stop database (preserves data) |
-| `espacetech db start [name]` | Start a stopped database |
-| `espacetech db rotate [name]` | Rotate database password |
-| `espacetech db delete [name]` | Delete database and all its data |
+| `ghayma db create [name]` | Create a managed database |
+| `ghayma db create [name] --type redis` | Create with specific type (postgres, redis, mongodb) |
+| `ghayma db list` | List your databases |
+| `ghayma db info [name]` | Show database details |
+| `ghayma db credentials [name]` | Show connection credentials |
+| `ghayma db link [name] --project [slug]` | Link database to a project (injects env vars) |
+| `ghayma db unlink [name]` | Unlink database from its project |
+| `ghayma db expose [name]` | Enable external access |
+| `ghayma db unexpose [name]` | Disable external access |
+| `ghayma db stop [name]` | Stop database (preserves data) |
+| `ghayma db start [name]` | Start a stopped database |
+| `ghayma db rotate [name]` | Rotate database password |
+| `ghayma db delete [name]` | Delete database and all its data |
 
 ### Storage
 
 | Command | Description |
 |---|---|
-| `espacetech storage create [name]` | Create a storage bucket |
-| `espacetech storage list` | List your storage buckets |
-| `espacetech storage info [name]` | Show bucket details |
-| `espacetech storage credentials [name]` | Show S3 access credentials |
-| `espacetech storage link [name] --project [slug]` | Link bucket to a project (injects S3 env vars) |
-| `espacetech storage unlink [name]` | Unlink bucket from its project |
-| `espacetech storage expose [name]` | Make bucket publicly accessible |
-| `espacetech storage unexpose [name]` | Disable public access |
-| `espacetech storage rotate [name]` | Rotate S3 access credentials |
-| `espacetech storage delete [name]` | Delete bucket and all its data |
+| `ghayma storage create [name]` | Create a storage bucket |
+| `ghayma storage list` | List your storage buckets |
+| `ghayma storage info [name]` | Show bucket details |
+| `ghayma storage credentials [name]` | Show S3 access credentials |
+| `ghayma storage link [name] --project [slug]` | Link bucket to a project (injects S3 env vars) |
+| `ghayma storage unlink [name]` | Unlink bucket from its project |
+| `ghayma storage expose [name]` | Make bucket publicly accessible |
+| `ghayma storage unexpose [name]` | Disable public access |
+| `ghayma storage rotate [name]` | Rotate S3 access credentials |
+| `ghayma storage delete [name]` | Delete bucket and all its data |
 
 ### Auth Apps
 
 | Command | Description |
 |---|---|
-| `espacetech auth create [name]` | Create a managed auth service |
-| `espacetech auth create [name] --app-id my-app` | Create with custom app ID |
-| `espacetech auth list` | List your auth apps |
-| `espacetech auth info [name]` | Show auth app details and endpoints |
-| `espacetech auth config [name]` | Configure OAuth providers and settings |
-| `espacetech auth users [name]` | List users for an auth app |
-| `espacetech auth stats [name]` | Show auth app statistics |
-| `espacetech auth rotate-keys [name]` | Rotate JWT signing keys |
-| `espacetech auth delete [name]` | Delete auth app and all its users |
+| `ghayma auth create [name]` | Create a managed auth service |
+| `ghayma auth create [name] --app-id my-app` | Create with custom app ID |
+| `ghayma auth list` | List your auth apps |
+| `ghayma auth info [name]` | Show auth app details and endpoints |
+| `ghayma auth config [name]` | Configure OAuth providers and settings |
+| `ghayma auth users [name]` | List users for an auth app |
+| `ghayma auth stats [name]` | Show auth app statistics |
+| `ghayma auth rotate-keys [name]` | Rotate JWT signing keys |
+| `ghayma auth delete [name]` | Delete auth app and all its users |
 
 ## Project Configuration
 
-Running `espacetech init` creates a `.espacetech.json` file:
+Running `ghayma init` creates a `.ghayma.json` file in the project directory:
 
 ```json
 {
@@ -132,18 +134,20 @@ Running `espacetech init` creates a `.espacetech.json` file:
 }
 ```
 
+New projects use `.ghayma.json`. Existing projects that already have a `.espacetech.json` keep working — the CLI reads it as a fallback when no `.ghayma.json` is present, so no migration is required. The user-level config (auth token, API host) remains at `~/.paas-cli.json`.
+
 ## Building from Source
 
 ```bash
-git clone https://github.com/bz-reda/ETC-CLI.git
-cd ETC-CLI
+git clone https://github.com/bz-reda/ghayma-cli.git
+cd ghayma-cli
 make build
-./espacetech version
+./ghayma version
 ```
 
 ## Documentation
 
-Full documentation at [docs.espace-tech.com/cli](https://docs.espace-tech.com/cli).
+Full documentation at [docs.ghayma.dev/cli](https://docs.ghayma.dev/cli).
 
 ## License
 

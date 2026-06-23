@@ -12,8 +12,9 @@ import (
 )
 
 // BaselineIgnoreDirs are directory names always excluded from the upload,
-// regardless of user ignore rules. OR'd with any rules from .espacetechignore
-// or .dockerignore — user rules cannot re-include these.
+// regardless of user ignore rules. OR'd with any rules from .ghaymaignore,
+// the legacy .espacetechignore, or .dockerignore — user rules cannot
+// re-include these.
 var BaselineIgnoreDirs = []string{
 	"node_modules", ".next", ".git", ".turbo", "dist",
 }
@@ -28,15 +29,16 @@ var baselineSet = func() map[string]bool {
 
 // IgnoreRules holds user-supplied ignore patterns loaded from the source dir.
 type IgnoreRules struct {
-	Source   string   // ".espacetechignore", ".dockerignore", or "" when none found
+	Source   string   // ".ghaymaignore", ".espacetechignore", ".dockerignore", or "" when none found
 	Patterns []string // patterns as loaded, for display at deploy-time
 	matcher  *gitignore.GitIgnore
 }
 
-// LoadIgnoreRules reads .espacetechignore first, then .dockerignore, from
-// sourceDir. Returns empty rules (Source == "") when neither exists.
+// LoadIgnoreRules reads .ghaymaignore first, then the legacy .espacetechignore,
+// then .dockerignore, from sourceDir. Returns empty rules (Source == "") when
+// none exists.
 func LoadIgnoreRules(sourceDir string) *IgnoreRules {
-	for _, name := range []string{".espacetechignore", ".dockerignore"} {
+	for _, name := range []string{".ghaymaignore", ".espacetechignore", ".dockerignore"} {
 		data, err := os.ReadFile(filepath.Join(sourceDir, name))
 		if err != nil {
 			continue

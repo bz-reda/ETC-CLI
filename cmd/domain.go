@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"paas-cli/internal/api"
 	"paas-cli/internal/config"
@@ -19,13 +18,13 @@ var domainCmd = &cobra.Command{
 func runDomainCreate(cmd *cobra.Command, args []string) {
 	cfg := config.Load()
 	if cfg.Token == "" {
-		fmt.Println("❌ Please login first: espacetech login")
+		fmt.Println("❌ Please login first: ghayma login")
 		return
 	}
 
-	data, err := os.ReadFile(".espacetech.json")
+	data, err := readProjectConfig(".")
 	if err != nil {
-		fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+		fmt.Println("❌ No project config found. Run 'ghayma init' first.")
 		return
 	}
 
@@ -44,7 +43,7 @@ func runDomainCreate(cmd *cobra.Command, args []string) {
 	fmt.Printf("✅ Domain '%s' added to %s\n", domain, projectCfg.Name)
 	fmt.Println("\n📋 Next steps:")
 	fmt.Printf("   1. Add an A record in your DNS: %s → 65.109.68.181\n", domain)
-	fmt.Printf("   2. Redeploy: espacetech deploy --prod\n")
+	fmt.Printf("   2. Redeploy: ghayma deploy --prod\n")
 	fmt.Printf("   3. SSL will be provisioned automatically\n")
 }
 
@@ -73,13 +72,13 @@ var domainListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
-		data, err := os.ReadFile(".espacetech.json")
+		data, err := readProjectConfig(".")
 		if err != nil {
-			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+			fmt.Println("❌ No project config found. Run 'ghayma init' first.")
 			return
 		}
 
@@ -110,13 +109,13 @@ var domainDeleteYes bool
 func runDomainDelete(cmd *cobra.Command, args []string) {
 	cfg := config.Load()
 	if cfg.Token == "" {
-		fmt.Println("❌ Please login first: espacetech login")
+		fmt.Println("❌ Please login first: ghayma login")
 		return
 	}
 
-	data, err := os.ReadFile(".espacetech.json")
+	data, err := readProjectConfig(".")
 	if err != nil {
-		fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+		fmt.Println("❌ No project config found. Run 'ghayma init' first.")
 		return
 	}
 

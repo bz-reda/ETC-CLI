@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"paas-cli/internal/api"
 	"paas-cli/internal/config"
@@ -23,7 +22,7 @@ var siteListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -45,7 +44,7 @@ var siteListCmd = &cobra.Command{
 			return
 		}
 
-		data, _ := os.ReadFile(".espacetech.json")
+		data, _ := readProjectConfig(".")
 		var localCfg struct {
 			SiteID string `json:"site_id"`
 		}
@@ -59,14 +58,14 @@ var siteListCmd = &cobra.Command{
 			}
 			fmt.Printf("  %s%s  (slug: %s, status: %s, id: %s)\n", marker, s.Name, s.Slug, s.Status, s.ID)
 		}
-		fmt.Println("\nTo switch active site: espacetech site use <slug>")
+		fmt.Println("\nTo switch active site: ghayma site use <slug>")
 	},
 }
 
 func runSiteCreate(cmd *cobra.Command, args []string) {
 	cfg := config.Load()
 	if cfg.Token == "" {
-		fmt.Println("❌ Please login first: espacetech login")
+		fmt.Println("❌ Please login first: ghayma login")
 		return
 	}
 
@@ -97,8 +96,8 @@ func runSiteCreate(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("✅ Site '%s' created (slug: %s, id: %s)\n", site.Name, site.Slug, site.ID)
 	fmt.Printf("\nTo deploy to this site, switch to it first:\n")
-	fmt.Printf("  espacetech site use %s\n", site.Slug)
-	fmt.Printf("  espacetech deploy --prod\n")
+	fmt.Printf("  ghayma site use %s\n", site.Slug)
+	fmt.Printf("  ghayma deploy --prod\n")
 }
 
 var siteCreateCmd = &cobra.Command{
@@ -123,20 +122,20 @@ var siteAddCmd = &cobra.Command{
 
 var siteUseCmd = &cobra.Command{
 	Use:   "use <slug>",
-	Short: "Switch the active site in .espacetech.json",
+	Short: "Switch the active site for the project",
 	Args:  requireOneArg("slug", "site list"),
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
 		slug := args[0]
 
-		data, err := os.ReadFile(".espacetech.json")
+		data, err := readProjectConfig(".")
 		if err != nil {
-			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+			fmt.Println("❌ No project config found. Run 'ghayma init' first.")
 			return
 		}
 
@@ -160,7 +159,7 @@ var siteUseCmd = &cobra.Command{
 
 		if matched == nil {
 			fmt.Printf("❌ Site '%s' not found in this project\n", slug)
-			fmt.Println("   Run 'espacetech site list' to see available sites")
+			fmt.Println("   Run 'ghayma site list' to see available sites")
 			return
 		}
 
@@ -168,11 +167,16 @@ var siteUseCmd = &cobra.Command{
 		projCfg.SiteName = matched.Name
 		projCfg.SiteSlug = matched.Slug
 
-		out, _ := json.MarshalIndent(projCfg, "", "  ")
-		os.WriteFile(".espacetech.json", out, 0644)
+		// Update-in-place: write back to the same file we read, so a legacy
+		// .espacetech.json project stays on .espacetech.json instead of silently
+		// migrating to .ghayma.json (which would strand teammates on the old CLI).
+		if err := writeProjectConfigUpdate(".", projCfg); err != nil {
+			fmt.Printf("❌ Failed to update project config: %v\n", err)
+			return
+		}
 
 		fmt.Printf("✅ Active site switched to '%s' (slug: %s)\n", matched.Name, matched.Slug)
-		fmt.Println("   Run 'espacetech deploy --prod' to deploy to this site")
+		fmt.Println("   Run 'ghayma deploy --prod' to deploy to this site")
 	},
 }
 

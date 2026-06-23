@@ -15,16 +15,16 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "espacetech",
-	Short: "Espace-Tech Cloud CLI",
-	Long:  "Deploy and manage your applications on Espace-Tech Cloud",
+	Use:   "ghayma",
+	Short: "Ghayma CLI",
+	Long:  "Deploy and manage your applications on Ghayma",
 }
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print the CLI version",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Printf("espacetech %s\n", version)
+		fmt.Printf("ghayma %s\n", version)
 	},
 }
 
