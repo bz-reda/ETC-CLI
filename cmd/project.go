@@ -177,11 +177,11 @@ to.`,
 	},
 }
 
-// readProjectIDAndName reads .espacetech.json from CWD and returns the
+// readProjectIDAndName reads the project config from CWD and returns the
 // project's UUID and display name. Kept separate from deploy's projectConfig
 // so it can be used from any directory regardless of site-level linking.
 func readProjectIDAndName() (string, string, error) {
-	data, err := os.ReadFile(".espacetech.json")
+	data, err := readProjectConfig(".")
 	if err != nil {
 		return "", "", fmt.Errorf("no project config found — run 'espacetech init' or 'espacetech link' first")
 	}
@@ -190,10 +190,10 @@ func readProjectIDAndName() (string, string, error) {
 		Name      string `json:"name"`
 	}
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return "", "", fmt.Errorf("invalid .espacetech.json: %w", err)
+		return "", "", fmt.Errorf("invalid project config: %w", err)
 	}
 	if cfg.ProjectID == "" {
-		return "", "", fmt.Errorf("project_id missing from .espacetech.json")
+		return "", "", fmt.Errorf("project_id missing from project config")
 	}
 	return cfg.ProjectID, cfg.Name, nil
 }

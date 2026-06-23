@@ -57,9 +57,14 @@ func findMonorepoRoot(dir string) string {
 	}
 }
 
-// findInitializedApps scans a monorepo for apps that have .espacetech.json
+// findInitializedApps scans a monorepo for apps that have a project config
+// (.ghayma.json or the legacy .espacetech.json).
 func findInitializedApps(root string) []appChoice {
 	var apps []appChoice
+	// Track which app dirs we've already recorded so an app holding both
+	// configs (e.g. after a partial rename) is listed once, with the new
+	// .ghayma.json winning over the legacy file.
+	indexByDir := make(map[string]int)
 	skipDirs := map[string]bool{
 		"node_modules": true, ".git": true, ".next": true,
 		".turbo": true, "dist": true, ".cache": true,
@@ -77,7 +82,7 @@ func findInitializedApps(root string) []appChoice {
 		if info.IsDir() && len(strings.Split(relPath, string(filepath.Separator))) > 4 {
 			return filepath.SkipDir
 		}
-		if info.Name() == ".espacetech.json" {
+		if info.Name() == projectConfigName || info.Name() == legacyProjectConfigName {
 			data, readErr := os.ReadFile(path)
 			if readErr != nil {
 				return nil
@@ -87,12 +92,17 @@ func findInitializedApps(root string) []appChoice {
 
 			appDir := filepath.Dir(path)
 			rel, _ := filepath.Rel(root, appDir)
+			choice := appChoice{Config: cfg, Dir: appDir, RelDir: rel}
 
-			apps = append(apps, appChoice{
-				Config: cfg,
-				Dir:    appDir,
-				RelDir: rel,
-			})
+			if i, seen := indexByDir[appDir]; seen {
+				// Already recorded from the legacy file; the new config wins.
+				if info.Name() == projectConfigName {
+					apps[i] = choice
+				}
+				return nil
+			}
+			indexByDir[appDir] = len(apps)
+			apps = append(apps, choice)
 		}
 		return nil
 	})
@@ -113,8 +123,12 @@ var deployCmd = &cobra.Command{
 		var projCfg projectConfig
 		var appDir string
 
-		// Try to read .espacetech.json from CWD
-		data, err := os.ReadFile(filepath.Join(cwd, ".espacetech.json"))
+		// Try to read the project config from CWD
+		configPath, err := findProjectConfig(cwd)
+		var data []byte
+		if err == nil {
+			data, err = os.ReadFile(configPath)
+		}
 		if err != nil {
 			// No config in CWD - check if inside a monorepo
 			monorepoRoot := findMonorepoRoot(cwd)
@@ -251,7 +265,7 @@ func init() {
 func printIgnoreRules(rules *api.IgnoreRules) {
 	fmt.Printf("📋 Baseline ignore: %s\n", strings.Join(api.BaselineIgnoreDirs, ", "))
 	if rules == nil || rules.Source == "" {
-		fmt.Println("   (no .espacetechignore or .dockerignore found)")
+		fmt.Println("   (no .ghaymaignore, .espacetechignore, or .dockerignore found)")
 		return
 	}
 	if len(rules.Patterns) == 0 {

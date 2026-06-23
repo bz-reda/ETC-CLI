@@ -23,7 +23,12 @@ var deleteCmd = &cobra.Command{
 			return
 		}
 
-		data, err := os.ReadFile(".espacetech.json")
+		configPath, err := findProjectConfig(".")
+		if err != nil {
+			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+			return
+		}
+		data, err := os.ReadFile(configPath)
 		if err != nil {
 			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
 			return
@@ -54,7 +59,7 @@ var deleteCmd = &cobra.Command{
 			return
 		}
 
-		os.Remove(".espacetech.json")
+		os.Remove(configPath)
 		fmt.Printf("✅ Project '%s' deleted successfully.\n", projectCfg.Name)
 	},
 }

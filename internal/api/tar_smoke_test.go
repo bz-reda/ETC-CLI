@@ -153,3 +153,36 @@ func TestLoadIgnoreRules_Prefers_Espacetechignore(t *testing.T) {
 		t.Fatalf("expected .espacetechignore preferred, got %q", rules.Source)
 	}
 }
+
+func TestLoadIgnoreRules_Prefers_Ghaymaignore(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(src+"/.ghaymaignore", []byte("new\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src+"/.espacetechignore", []byte("legacy\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(src+"/.dockerignore", []byte("docker\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	rules := LoadIgnoreRules(src)
+	if rules.Source != ".ghaymaignore" {
+		t.Fatalf("expected .ghaymaignore preferred, got %q", rules.Source)
+	}
+}
+
+// TestLoadIgnoreRules_BackCompatEspacetechignore is the ignore-file back-compat
+// gate: a project with ONLY the legacy .espacetechignore must still load it.
+func TestLoadIgnoreRules_BackCompatEspacetechignore(t *testing.T) {
+	src := t.TempDir()
+	if err := os.WriteFile(src+"/.espacetechignore", []byte("legacy-only\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	rules := LoadIgnoreRules(src)
+	if rules.Source != ".espacetechignore" {
+		t.Fatalf("back-compat broken: expected legacy .espacetechignore to load, got %q", rules.Source)
+	}
+	if len(rules.Patterns) != 1 || rules.Patterns[0] != "legacy-only" {
+		t.Fatalf("expected legacy patterns to load, got %v", rules.Patterns)
+	}
+}

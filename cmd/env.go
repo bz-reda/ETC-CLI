@@ -19,9 +19,9 @@ var envCmd = &cobra.Command{
 	Short: "Manage environment variables",
 }
 
-// localConfig reads .espacetech.json and returns projectID + siteID.
+// localConfig reads the project config and returns projectID + siteID.
 func localConfig() (projectID, siteID, name string, err error) {
-	data, readErr := os.ReadFile(".espacetech.json")
+	data, readErr := readProjectConfig(".")
 	if readErr != nil {
 		return "", "", "", fmt.Errorf("no project config found — run 'espacetech init' first")
 	}

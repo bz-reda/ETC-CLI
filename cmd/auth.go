@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"regexp"
 	"sort"
 	"strings"
@@ -85,9 +84,9 @@ var authCreateCmd = &cobra.Command{
 				return
 			}
 		} else {
-			data, err := os.ReadFile(".espacetech.json")
+			data, err := readProjectConfig(".")
 			if err != nil {
-				fmt.Println("❌ No --project flag and no .espacetech.json found")
+				fmt.Println("❌ No --project flag and no project config found")
 				return
 			}
 			var projectCfg struct {

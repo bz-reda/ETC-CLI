@@ -1,9 +1,8 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
 	"encoding/json"
+	"fmt"
 
 	"paas-cli/internal/api"
 	"paas-cli/internal/config"
@@ -30,9 +29,9 @@ var dbCreateCmd = &cobra.Command{
 			return
 		}
 
-		// Read project_id from .espacetech.json
+		// Read project_id from the project config
 		projectID := ""
-		data, err := os.ReadFile(".espacetech.json")
+		data, err := readProjectConfig(".")
 		if err == nil {
 			var projectCfg struct {
 				ProjectID string `json:"project_id"`
@@ -41,7 +40,7 @@ var dbCreateCmd = &cobra.Command{
 			projectID = projectCfg.ProjectID
 		}
 		if projectID == "" {
-			fmt.Println("❌ No .espacetech.json found. Run 'espacetech init' first or run this command from a project directory.")
+			fmt.Println("❌ No project config found. Run 'espacetech init' first or run this command from a project directory.")
 			return
 		}
 
@@ -191,9 +190,9 @@ var dbLinkCmd = &cobra.Command{
 				return
 			}
 		} else {
-			data, err := os.ReadFile(".espacetech.json")
+			data, err := readProjectConfig(".")
 			if err != nil {
-				fmt.Println("❌ No --project flag and no .espacetech.json found")
+				fmt.Println("❌ No --project flag and no project config found")
 				return
 			}
 			var projectCfg struct {

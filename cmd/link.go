@@ -27,8 +27,8 @@ init creates a brand-new project, while link connects to one you already own.`,
 			return
 		}
 
-		if _, err := os.Stat(".espacetech.json"); err == nil {
-			fmt.Println("⚠️  This directory is already linked. Delete .espacetech.json to re-link.")
+		if _, err := findProjectConfig("."); err == nil {
+			fmt.Println("⚠️  This directory is already linked. Delete the project config to re-link.")
 			return
 		}
 
@@ -118,14 +118,15 @@ init creates a brand-new project, while link connects to one you already own.`,
 			SiteSlug:  site.Slug,
 		}
 		data, _ := json.MarshalIndent(projectCfg, "", "  ")
-		if err := os.WriteFile(".espacetech.json", data, 0644); err != nil {
-			fmt.Printf("❌ Failed to write .espacetech.json: %v\n", err)
+		configPath := projectConfigWritePath(".")
+		if err := os.WriteFile(configPath, data, 0644); err != nil {
+			fmt.Printf("❌ Failed to write %s: %v\n", configPath, err)
 			return
 		}
 
 		fmt.Printf("✅ Linked to project '%s' (slug: %s)\n", project.Name, project.Slug)
 		fmt.Printf("   Site: %s (slug: %s)\n", site.Name, site.Slug)
-		fmt.Println("📁 Config saved to .espacetech.json")
+		fmt.Printf("📁 Config saved to %s\n", configPath)
 		fmt.Println("\nNext: run 'espacetech deploy --prod' to deploy")
 	},
 }

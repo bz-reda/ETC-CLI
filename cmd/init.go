@@ -36,8 +36,8 @@ var initCmd = &cobra.Command{
 		}
 
 		// Check if already initialized
-		if _, err := os.Stat(".espacetech.json"); err == nil {
-			fmt.Println("⚠️  Project already initialized. Delete .espacetech.json to re-initialize.")
+		if _, err := findProjectConfig("."); err == nil {
+			fmt.Println("⚠️  Project already initialized. Delete the project config to re-initialize.")
 			return
 		}
 
@@ -46,8 +46,8 @@ var initCmd = &cobra.Command{
 		// inside it so the deploy flow sends the correct root_directory.
 		appSubdir := detectMonorepoAppSubdir()
 		if appSubdir != "" {
-			if _, err := os.Stat(filepath.Join(appSubdir, ".espacetech.json")); err == nil {
-				fmt.Printf("⚠️  %s/.espacetech.json already exists. Delete it to re-initialize.\n", appSubdir)
+			if existing, err := findProjectConfig(appSubdir); err == nil {
+				fmt.Printf("⚠️  %s already exists. Delete it to re-initialize.\n", existing)
 				return
 			}
 		}
@@ -145,9 +145,9 @@ var initCmd = &cobra.Command{
 			SiteName:  siteName,
 			SiteSlug:  siteSlug,
 		}
-		configPath := ".espacetech.json"
+		configPath := projectConfigWritePath(".")
 		if appSubdir != "" {
-			configPath = filepath.Join(appSubdir, ".espacetech.json")
+			configPath = projectConfigWritePath(appSubdir)
 		}
 		data, _ := json.MarshalIndent(projectCfg, "", "  ")
 		if err := os.WriteFile(configPath, data, 0644); err != nil {

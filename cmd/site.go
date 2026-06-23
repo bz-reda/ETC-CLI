@@ -45,7 +45,7 @@ var siteListCmd = &cobra.Command{
 			return
 		}
 
-		data, _ := os.ReadFile(".espacetech.json")
+		data, _ := readProjectConfig(".")
 		var localCfg struct {
 			SiteID string `json:"site_id"`
 		}
@@ -134,7 +134,7 @@ var siteUseCmd = &cobra.Command{
 
 		slug := args[0]
 
-		data, err := os.ReadFile(".espacetech.json")
+		data, err := readProjectConfig(".")
 		if err != nil {
 			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
 			return
@@ -169,7 +169,7 @@ var siteUseCmd = &cobra.Command{
 		projCfg.SiteSlug = matched.Slug
 
 		out, _ := json.MarshalIndent(projCfg, "", "  ")
-		os.WriteFile(".espacetech.json", out, 0644)
+		os.WriteFile(projectConfigWritePath("."), out, 0644)
 
 		fmt.Printf("✅ Active site switched to '%s' (slug: %s)\n", matched.Name, matched.Slug)
 		fmt.Println("   Run 'espacetech deploy --prod' to deploy to this site")

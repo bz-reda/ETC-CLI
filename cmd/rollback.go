@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"paas-cli/internal/api"
 	"paas-cli/internal/config"
@@ -21,7 +20,7 @@ var rollbackCmd = &cobra.Command{
 			return
 		}
 
-		data, err := os.ReadFile(".espacetech.json")
+		data, err := readProjectConfig(".")
 		if err != nil {
 			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
 			return
