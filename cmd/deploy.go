@@ -115,7 +115,7 @@ var deployCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -134,15 +134,15 @@ var deployCmd = &cobra.Command{
 			monorepoRoot := findMonorepoRoot(cwd)
 			if monorepoRoot == "" {
 				fmt.Println("❌ No project config found.")
-				fmt.Println("   • New project?       run 'espacetech init'")
-				fmt.Println("   • Existing project?  run 'espacetech link'")
+				fmt.Println("   • New project?       run 'ghayma init'")
+				fmt.Println("   • Existing project?  run 'ghayma link'")
 				return
 			}
 
 			apps := findInitializedApps(monorepoRoot)
 			if len(apps) == 0 {
 				fmt.Println("❌ No initialized apps found in this monorepo.")
-				fmt.Println("   Navigate to your app directory and run 'espacetech init' first.")
+				fmt.Println("   Navigate to your app directory and run 'ghayma init' first.")
 				return
 			}
 
@@ -253,7 +253,7 @@ var deployCmd = &cobra.Command{
 			}
 		}
 
-		fmt.Println("\n⚠️  Deploy timed out. Check status with: espacetech status")
+		fmt.Println("\n⚠️  Deploy timed out. Check status with: ghayma status")
 	},
 }
 

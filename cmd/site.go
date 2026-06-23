@@ -22,7 +22,7 @@ var siteListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -58,14 +58,14 @@ var siteListCmd = &cobra.Command{
 			}
 			fmt.Printf("  %s%s  (slug: %s, status: %s, id: %s)\n", marker, s.Name, s.Slug, s.Status, s.ID)
 		}
-		fmt.Println("\nTo switch active site: espacetech site use <slug>")
+		fmt.Println("\nTo switch active site: ghayma site use <slug>")
 	},
 }
 
 func runSiteCreate(cmd *cobra.Command, args []string) {
 	cfg := config.Load()
 	if cfg.Token == "" {
-		fmt.Println("❌ Please login first: espacetech login")
+		fmt.Println("❌ Please login first: ghayma login")
 		return
 	}
 
@@ -96,8 +96,8 @@ func runSiteCreate(cmd *cobra.Command, args []string) {
 
 	fmt.Printf("✅ Site '%s' created (slug: %s, id: %s)\n", site.Name, site.Slug, site.ID)
 	fmt.Printf("\nTo deploy to this site, switch to it first:\n")
-	fmt.Printf("  espacetech site use %s\n", site.Slug)
-	fmt.Printf("  espacetech deploy --prod\n")
+	fmt.Printf("  ghayma site use %s\n", site.Slug)
+	fmt.Printf("  ghayma deploy --prod\n")
 }
 
 var siteCreateCmd = &cobra.Command{
@@ -127,7 +127,7 @@ var siteUseCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -135,7 +135,7 @@ var siteUseCmd = &cobra.Command{
 
 		data, err := readProjectConfig(".")
 		if err != nil {
-			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+			fmt.Println("❌ No project config found. Run 'ghayma init' first.")
 			return
 		}
 
@@ -159,7 +159,7 @@ var siteUseCmd = &cobra.Command{
 
 		if matched == nil {
 			fmt.Printf("❌ Site '%s' not found in this project\n", slug)
-			fmt.Println("   Run 'espacetech site list' to see available sites")
+			fmt.Println("   Run 'ghayma site list' to see available sites")
 			return
 		}
 
@@ -176,7 +176,7 @@ var siteUseCmd = &cobra.Command{
 		}
 
 		fmt.Printf("✅ Active site switched to '%s' (slug: %s)\n", matched.Name, matched.Slug)
-		fmt.Println("   Run 'espacetech deploy --prod' to deploy to this site")
+		fmt.Println("   Run 'ghayma deploy --prod' to deploy to this site")
 	},
 }
 

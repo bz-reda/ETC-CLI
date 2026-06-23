@@ -17,7 +17,7 @@ import (
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Login to Espace-Tech Cloud",
+	Short: "Login to Ghayma",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		client := api.NewClient(cfg)

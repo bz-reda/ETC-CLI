@@ -59,7 +59,7 @@ var authCreateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -110,7 +110,7 @@ var authCreateCmd = &cobra.Command{
 		fmt.Printf("   Login:     POST https://auth.ghayma.tech/v1/%s/login\n", app.AppID)
 		fmt.Printf("   JWKS:      GET  https://auth.ghayma.tech/v1/%s/.well-known/jwks.json\n", app.AppID)
 		fmt.Println("\n📋 Next steps:")
-		fmt.Printf("   espacetech auth config %s --google-client-id <id> --google-client-secret <secret>\n", args[0])
+		fmt.Printf("   ghayma auth config %s --google-client-id <id> --google-client-secret <secret>\n", args[0])
 	},
 }
 
@@ -120,7 +120,7 @@ var authListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -132,7 +132,7 @@ var authListCmd = &cobra.Command{
 		}
 
 		if len(apps) == 0 {
-			fmt.Println("No auth apps found. Create one with: espacetech auth create <name> --project <project>")
+			fmt.Println("No auth apps found. Create one with: ghayma auth create <name> --project <project>")
 			return
 		}
 
@@ -157,7 +157,7 @@ var authInfoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -229,7 +229,7 @@ var authConfigCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -302,7 +302,7 @@ var authUsersCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -346,7 +346,7 @@ var authStatsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -377,7 +377,7 @@ var authDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -413,7 +413,7 @@ var authRotateKeysCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 

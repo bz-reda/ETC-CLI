@@ -15,7 +15,7 @@ var statusCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -27,7 +27,7 @@ var statusCmd = &cobra.Command{
 		}
 
 		if len(projects) == 0 {
-			fmt.Println("No projects yet. Run 'espacetech init' to create one.")
+			fmt.Println("No projects yet. Run 'ghayma init' to create one.")
 			return
 		}
 

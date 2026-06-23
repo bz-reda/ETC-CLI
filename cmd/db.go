@@ -25,7 +25,7 @@ var dbCreateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -40,7 +40,7 @@ var dbCreateCmd = &cobra.Command{
 			projectID = projectCfg.ProjectID
 		}
 		if projectID == "" {
-			fmt.Println("❌ No project config found. Run 'espacetech init' first or run this command from a project directory.")
+			fmt.Println("❌ No project config found. Run 'ghayma init' first or run this command from a project directory.")
 			return
 		}
 
@@ -84,7 +84,7 @@ var dbListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -96,7 +96,7 @@ var dbListCmd = &cobra.Command{
 		}
 
 		if len(databases) == 0 {
-			fmt.Println("No databases found. Create one with: espacetech db create <name> --type postgres")
+			fmt.Println("No databases found. Create one with: ghayma db create <name> --type postgres")
 			return
 		}
 
@@ -118,7 +118,7 @@ var dbInfoCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -158,7 +158,7 @@ var dbLinkCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -219,7 +219,7 @@ var dbUnlinkCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -247,7 +247,7 @@ var dbDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -297,7 +297,7 @@ var dbExposeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -319,7 +319,7 @@ var dbExposeCmd = &cobra.Command{
 		fmt.Printf("   Port: %v\n", result["external_port"])
 		fmt.Printf("   Connection: %v\n", result["connection"])
 		fmt.Println("\n📋 Get full credentials with:")
-		fmt.Printf("   espacetech db credentials %s\n", args[0])
+		fmt.Printf("   ghayma db credentials %s\n", args[0])
 	},
 }
 
@@ -330,7 +330,7 @@ var dbUnexposeCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -358,7 +358,7 @@ var dbCredentialsCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -391,7 +391,7 @@ var dbCredentialsCmd = &cobra.Command{
 			fmt.Printf("   External URL: %v\n", creds["external_url"])
 		} else {
 			fmt.Println("\n   ℹ️  External access is off. Enable with:")
-			fmt.Printf("      espacetech db expose %s\n", args[0])
+			fmt.Printf("      ghayma db expose %s\n", args[0])
 		}
 	},
 }
@@ -403,7 +403,7 @@ var dbStopCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -421,7 +421,7 @@ var dbStopCmd = &cobra.Command{
 		}
 
 		fmt.Printf("✅ Database '%s' stopped. Data is preserved.\n", args[0])
-		fmt.Printf("   Restart with: espacetech db start %s\n", args[0])
+		fmt.Printf("   Restart with: ghayma db start %s\n", args[0])
 	},
 }
 
@@ -432,7 +432,7 @@ var dbStartCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -460,7 +460,7 @@ var dbRotateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -488,7 +488,7 @@ var dbRotateCmd = &cobra.Command{
 		fmt.Printf("✅ Password rotated for '%s'\n", args[0])
 		fmt.Printf("   New password: %v\n", result["new_password"])
 		fmt.Println("\n   ⚠️  Save this password now — it won't be shown again.")
-		fmt.Printf("   Get full connection string: espacetech db credentials %s\n", args[0])
+		fmt.Printf("   Get full connection string: ghayma db credentials %s\n", args[0])
 	},
 }
 

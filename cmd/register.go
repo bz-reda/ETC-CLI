@@ -12,7 +12,7 @@ import (
 
 var registerCmd = &cobra.Command{
 	Use:   "register",
-	Short: "Create a new Espace-Tech account",
+	Short: "Create a new Ghayma account",
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 
@@ -76,7 +76,7 @@ var registerCmd = &cobra.Command{
 			cfg.Save()
 			fmt.Println("🔑 Automatically logged in")
 		} else {
-			fmt.Println("📋 Please verify your email, then run: espacetech login")
+			fmt.Println("📋 Please verify your email, then run: ghayma login")
 		}
 	},
 }

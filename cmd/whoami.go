@@ -38,7 +38,7 @@ var whoamiCmd = &cobra.Command{
 		}
 
 		if !loggedIn {
-			fmt.Println("✗ Not signed in. Run: espacetech login")
+			fmt.Println("✗ Not signed in. Run: ghayma login")
 			os.Exit(1)
 		}
 

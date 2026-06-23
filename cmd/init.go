@@ -31,7 +31,7 @@ var initCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
@@ -112,7 +112,7 @@ var initCmd = &cobra.Command{
 			site, err := client.CreateSite(project.ID, siteName)
 			if err != nil {
 				fmt.Printf("⚠️  Failed to create site '%s': %v\n", siteName, err)
-				fmt.Println("   You can add sites later with: espacetech site add <name>")
+				fmt.Println("   You can add sites later with: ghayma site add <name>")
 			} else {
 				siteID = site.ID
 				siteSlug = site.Slug
@@ -160,7 +160,7 @@ var initCmd = &cobra.Command{
 			fmt.Printf("   Site: %s (slug: %s)\n", siteName, siteSlug)
 		}
 		fmt.Printf("📁 Config saved to %s\n", configPath)
-		fmt.Println("\nNext: run 'espacetech deploy --prod' to deploy")
+		fmt.Println("\nNext: run 'ghayma deploy --prod' to deploy")
 	},
 }
 
@@ -223,7 +223,7 @@ func resolveBillingAccount(client *api.Client, flagValue string) (string, error)
 	case 0:
 		return "", fmt.Errorf("no eligible billing account found.\n" +
 			"   A billing account is required to create a project.\n" +
-			"   Create one at dashboard.ghayma.dev/settings/billing, then re-run 'espacetech init'\n" +
+			"   Create one at dashboard.ghayma.dev/settings/billing, then re-run 'ghayma init'\n" +
 			"   (or pass --billing-account <id> if you already have one).")
 	case 1:
 		a := eligible[0]

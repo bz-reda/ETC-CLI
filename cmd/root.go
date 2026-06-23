@@ -16,8 +16,8 @@ var (
 
 var rootCmd = &cobra.Command{
 	Use:   "ghayma",
-	Short: "Espace-Tech Cloud CLI",
-	Long:  "Deploy and manage your applications on Espace-Tech Cloud",
+	Short: "Ghayma CLI",
+	Long:  "Deploy and manage your applications on Ghayma",
 }
 
 var versionCmd = &cobra.Command{

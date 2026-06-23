@@ -16,13 +16,13 @@ var rollbackCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		cfg := config.Load()
 		if cfg.Token == "" {
-			fmt.Println("❌ Please login first: espacetech login")
+			fmt.Println("❌ Please login first: ghayma login")
 			return
 		}
 
 		data, err := readProjectConfig(".")
 		if err != nil {
-			fmt.Println("❌ No project config found. Run 'espacetech init' first.")
+			fmt.Println("❌ No project config found. Run 'ghayma init' first.")
 			return
 		}
 
