@@ -216,7 +216,15 @@ var deployCmd = &cobra.Command{
 		// auto-generated path — same output as before in that case.
 		printCustomDockerfileHint(sourceDir, rootDirectory, projCfg.DockerfilePath)
 
-		resp, err := client.Deploy(projCfg.ProjectID, projCfg.SiteID, sourceDir, "CLI deploy", deployProd, rootDirectory, projCfg.DockerfilePath, rules)
+		bc := api.DeployBuildConfig{
+			Framework:       projCfg.Framework,
+			BuildCommand:    projCfg.BuildCommand,
+			InstallCommand:  projCfg.InstallCommand,
+			StartCommand:    projCfg.StartCommand,
+			OutputDirectory: projCfg.OutputDirectory,
+			Port:            projCfg.Port,
+		}
+		resp, err := client.Deploy(projCfg.ProjectID, projCfg.SiteID, sourceDir, "CLI deploy", deployProd, rootDirectory, projCfg.DockerfilePath, bc, rules)
 		if err != nil {
 			fmt.Printf("❌ Deploy failed: %v\n", err)
 			return

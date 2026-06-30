@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"paas-cli/internal/config"
 )
@@ -286,11 +287,22 @@ type DeployResponse struct {
 	Message      string `json:"message"`
 }
 
+// DeployBuildConfig carries the .ghayma.json build fields sent in the upload
+// form. Empty fields are omitted (the backend persist-back ignores them).
+type DeployBuildConfig struct {
+	Framework       string
+	BuildCommand    string
+	InstallCommand  string
+	StartCommand    string
+	OutputDirectory string
+	Port            int
+}
+
 // Deploy uploads a tarball to /api/v1/deploy/upload and starts a build.
 // dockerfilePath is the optional Part 2 PR-C explicit override; pass empty
 // string to fall back to the platform convention (literal `Dockerfile` at
 // appDir, only honored when projects.custom_dockerfile_enabled is TRUE).
-func (c *Client) Deploy(projectID, siteID, sourceDir, commitMessage string, isProduction bool, rootDirectory, dockerfilePath string, rules *IgnoreRules) (*DeployResponse, error) {
+func (c *Client) Deploy(projectID, siteID, sourceDir, commitMessage string, isProduction bool, rootDirectory, dockerfilePath string, bc DeployBuildConfig, rules *IgnoreRules) (*DeployResponse, error) {
 	tarPath := filepath.Join(os.TempDir(), "paas-source.tar.gz")
 	defer os.Remove(tarPath)
 
@@ -314,6 +326,24 @@ func (c *Client) Deploy(projectID, siteID, sourceDir, commitMessage string, isPr
 	}
 	if dockerfilePath != "" {
 		writer.WriteField("dockerfile_path", dockerfilePath)
+	}
+	if bc.Framework != "" {
+		writer.WriteField("framework", bc.Framework)
+	}
+	if bc.BuildCommand != "" {
+		writer.WriteField("build_command", bc.BuildCommand)
+	}
+	if bc.InstallCommand != "" {
+		writer.WriteField("install_command", bc.InstallCommand)
+	}
+	if bc.StartCommand != "" {
+		writer.WriteField("start_command", bc.StartCommand)
+	}
+	if bc.OutputDirectory != "" {
+		writer.WriteField("output_directory", bc.OutputDirectory)
+	}
+	if bc.Port > 0 {
+		writer.WriteField("port", strconv.Itoa(bc.Port))
 	}
 
 	file, err := os.Open(tarPath)
