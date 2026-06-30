@@ -23,6 +23,42 @@ type ProjectConfig struct {
 	SiteName      string `json:"site_name,omitempty"`
 	SiteSlug      string `json:"site_slug,omitempty"`
 	RootDirectory string `json:"root_directory,omitempty"`
+	// Build config: optional overrides recorded from init; the server
+	// still auto-detects when these are empty.
+	BuildCommand    string `json:"build_command,omitempty"`
+	InstallCommand  string `json:"install_command,omitempty"`
+	StartCommand    string `json:"start_command,omitempty"`
+	OutputDirectory string `json:"output_directory,omitempty"`
+	Port            int    `json:"port,omitempty"`
+}
+
+// detectFramework inspects the project files to pick a framework label for
+// .ghayma.json. package.json is checked BEFORE index.html so a Node/Next app
+// that ships a static index.html isn't mis-detected as static. "auto" lets the
+// platform decide (it auto-routes static / Node / Next.js / Python / Go / …).
+func detectFramework(dir string) string {
+	has := func(f string) bool { _, err := os.Stat(filepath.Join(dir, f)); return err == nil }
+	switch {
+	case has("package.json"):
+		if data, err := os.ReadFile(filepath.Join(dir, "package.json")); err == nil && strings.Contains(string(data), `"next"`) {
+			return "nextjs"
+		}
+		return "node"
+	case has("go.mod"):
+		return "go"
+	case has("requirements.txt") || has("pyproject.toml"):
+		return "python"
+	case has("composer.json"):
+		return "php"
+	case has("Gemfile"):
+		return "ruby"
+	case has("Cargo.toml"):
+		return "rust"
+	case has("index.html"):
+		return "static"
+	default:
+		return "auto"
+	}
 }
 
 var initCmd = &cobra.Command{
@@ -56,12 +92,10 @@ var initCmd = &cobra.Command{
 		namePrompt := promptui.Prompt{Label: "Project name"}
 		name, _ := namePrompt.Run()
 
-		// Framework
-		frameworkSelect := promptui.Select{
-			Label: "Framework",
-			Items: []string{"nextjs"},
-		}
-		_, framework, _ := frameworkSelect.Run()
+		// Framework — auto-detected from the project files (no longer a
+		// hardcoded nextjs picker). "auto" defers to the platform.
+		framework := detectFramework(".")
+		fmt.Printf("🔎 Detected framework: %s\n", framework)
 
 		client := api.NewClient(cfg)
 
@@ -140,7 +174,7 @@ var initCmd = &cobra.Command{
 			ProjectID: project.ID,
 			Name:      project.Name,
 			Slug:      project.Slug,
-			Framework: project.Framework,
+			Framework: framework,
 			SiteID:    siteID,
 			SiteName:  siteName,
 			SiteSlug:  siteSlug,

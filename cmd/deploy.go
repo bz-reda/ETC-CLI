@@ -34,6 +34,13 @@ type projectConfig struct {
 	// `custom_dockerfile_enabled` is set on the project from the
 	// Customer Dashboard (Part 2 alpha feature flag).
 	DockerfilePath string `json:"dockerfile_path,omitempty"`
+	// Build config: optional overrides recorded from init; the server
+	// still auto-detects when these are empty.
+	BuildCommand    string `json:"build_command,omitempty"`
+	InstallCommand  string `json:"install_command,omitempty"`
+	StartCommand    string `json:"start_command,omitempty"`
+	OutputDirectory string `json:"output_directory,omitempty"`
+	Port            int    `json:"port,omitempty"`
 }
 
 type appChoice struct {
@@ -209,7 +216,15 @@ var deployCmd = &cobra.Command{
 		// auto-generated path — same output as before in that case.
 		printCustomDockerfileHint(sourceDir, rootDirectory, projCfg.DockerfilePath)
 
-		resp, err := client.Deploy(projCfg.ProjectID, projCfg.SiteID, sourceDir, "CLI deploy", deployProd, rootDirectory, projCfg.DockerfilePath, rules)
+		bc := api.DeployBuildConfig{
+			Framework:       projCfg.Framework,
+			BuildCommand:    projCfg.BuildCommand,
+			InstallCommand:  projCfg.InstallCommand,
+			StartCommand:    projCfg.StartCommand,
+			OutputDirectory: projCfg.OutputDirectory,
+			Port:            projCfg.Port,
+		}
+		resp, err := client.Deploy(projCfg.ProjectID, projCfg.SiteID, sourceDir, "CLI deploy", deployProd, rootDirectory, projCfg.DockerfilePath, bc, rules)
 		if err != nil {
 			fmt.Printf("❌ Deploy failed: %v\n", err)
 			return
