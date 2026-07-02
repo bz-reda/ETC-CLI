@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 
 	"paas-cli/internal/config"
 )
@@ -615,6 +616,11 @@ func (c *Client) Rollback(deploymentID string) (*RollbackResponse, error) {
 	return &result, nil
 }
 
+// GetAppLogs fetches runtime log entries ({"entries":[…],"truncated":…})
+// and renders them one per line as "<ts> [<pod>] <msg>". Returns "" when
+// the app has no entries. The pre-2026-07 decoder read a legacy
+// {"logs":"…"} shape, so every response printed as nothing — including
+// during incidents when the logs were the whole point.
 func (c *Client) GetAppLogs(projectID string, lines int) (string, error) {
 	resp, err := c.authRequest("GET", fmt.Sprintf("/api/v1/projects/%s/logs?lines=%d", projectID, lines), nil)
 	if err != nil {
@@ -622,11 +628,31 @@ func (c *Client) GetAppLogs(projectID string, lines int) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	var result struct {
-		Logs string `json:"logs"`
+	if resp.StatusCode != 200 {
+		respBody, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed: %s", string(respBody))
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
-	return result.Logs, nil
+
+	var result struct {
+		Entries []struct {
+			TS  string `json:"ts"`
+			Msg string `json:"msg"`
+			Pod string `json:"pod"`
+		} `json:"entries"`
+		Truncated bool `json:"truncated"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", fmt.Errorf("parse logs response: %w", err)
+	}
+
+	var b strings.Builder
+	for _, e := range result.Entries {
+		fmt.Fprintf(&b, "%s [%s] %s\n", e.TS, e.Pod, e.Msg)
+	}
+	if result.Truncated {
+		b.WriteString("… (truncated — request more with --lines)\n")
+	}
+	return strings.TrimRight(b.String(), "\n"), nil
 }
 
 func (c *Client) DeleteProject(projectID string) error {
