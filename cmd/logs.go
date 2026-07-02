@@ -46,6 +46,10 @@ var logsCmd = &cobra.Command{
 			return
 		}
 
+		if logs == "" {
+			fmt.Println("(no log entries — the app may be idle, sleeping, or not deployed yet)")
+			return
+		}
 		fmt.Println(logs)
 	},
 }
